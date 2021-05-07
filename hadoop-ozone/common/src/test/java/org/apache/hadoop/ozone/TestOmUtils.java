@@ -50,7 +50,7 @@ public class TestOmUtils {
   public TemporaryFolder folder = new TemporaryFolder();
 
   @Rule
-  public Timeout timeout = new Timeout(60_000);
+  public Timeout timeout = Timeout.seconds(60);
 
 
   @Test
@@ -147,6 +147,11 @@ public class TestOmUtils {
           .contains("More than 1 OzoneManager ServiceID (ozone.om.service" +
               ".ids) configured"));
     }
+  }
+
+  @Test
+  public void checkMaxTransactionID() {
+    Assert.assertEquals((long) (Math.pow(2, 54) - 2), OmUtils.MAX_TRXN_ID);
   }
 }
 

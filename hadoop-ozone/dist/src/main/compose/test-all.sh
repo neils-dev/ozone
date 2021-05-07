@@ -23,30 +23,21 @@ SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )
 ALL_RESULT_DIR="$SCRIPT_DIR/result"
 PROJECT_DIR="$SCRIPT_DIR/.."
 mkdir -p "$ALL_RESULT_DIR"
-rm "$ALL_RESULT_DIR/*" || true
+rm "$ALL_RESULT_DIR"/* || true
 
 source "$SCRIPT_DIR"/testlib.sh
 
 if [ "$OZONE_WITH_COVERAGE" ]; then
    java -cp "$PROJECT_DIR"/share/coverage/$(ls "$PROJECT_DIR"/share/coverage | grep test-util):"$PROJECT_DIR"/share/coverage/jacoco-core.jar org.apache.hadoop.test.JacocoServer &
    DOCKER_BRIDGE_IP=$(docker network inspect bridge --format='{{(index .IPAM.Config 0).Gateway}}')
-   export HADOOP_OPTS="-javaagent:share/coverage/jacoco-agent.jar=output=tcpclient,address=$DOCKER_BRIDGE_IP,includes=org.apache.hadoop.ozone.*:org.apache.hadoop.hdds.*:org.apache.hadoop.fs.ozone.*"
+   export OZONE_OPTS="-javaagent:share/coverage/jacoco-agent.jar=output=tcpclient,address=$DOCKER_BRIDGE_IP,includes=org.apache.hadoop.ozone.*:org.apache.hadoop.hdds.*:org.apache.hadoop.fs.ozone.*"
 fi
 
 tests=$(find_tests)
 cd "$SCRIPT_DIR"
 
-RESULT=0
-# shellcheck disable=SC2044
-for t in ${tests}; do
-  d="$(dirname "${t}")"
-
-  if ! run_test_script "${d}"; then
-    RESULT=1
-  fi
-
-  copy_results "${d}" "${ALL_RESULT_DIR}"
-done
+run_test_scripts ${tests}
+RESULT=$?
 
 rebot --nostatusrc -N acceptance -d "$ALL_RESULT_DIR" "$ALL_RESULT_DIR"/*.xml
 

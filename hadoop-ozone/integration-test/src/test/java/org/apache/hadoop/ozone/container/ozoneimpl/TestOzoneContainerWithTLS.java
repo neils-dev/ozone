@@ -52,6 +52,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -68,13 +69,13 @@ import static org.apache.hadoop.ozone.OzoneConfigKeys.OZONE_SECURITY_ENABLED_KEY
 @RunWith(Parameterized.class)
 @Ignore("TODO:HDDS-1157")
 public class TestOzoneContainerWithTLS {
-  private final static Logger LOG = LoggerFactory.getLogger(
+  private static final Logger LOG = LoggerFactory.getLogger(
       TestOzoneContainerWithTLS.class);
   /**
    * Set the timeout for every test.
    */
   @Rule
-  public Timeout testTimeout = new Timeout(300000);
+  public Timeout testTimeout = Timeout.seconds(300);
 
   @Rule
   public TemporaryFolder tempFolder = new TemporaryFolder();
@@ -151,7 +152,7 @@ public class TestOzoneContainerWithTLS {
       container.start(UUID.randomUUID().toString());
 
       XceiverClientGrpc client = new XceiverClientGrpc(pipeline, conf,
-          caClient.getCACertificate());
+          Collections.singletonList(caClient.getCACertificate()));
 
       if (blockTokenEnabled) {
         secretManager.start(caClient);

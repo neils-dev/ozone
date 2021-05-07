@@ -26,6 +26,7 @@ import java.util.Random;
 import java.util.UUID;
 
 import org.apache.hadoop.conf.StorageUnit;
+import org.apache.hadoop.hdds.client.RatisReplicationConfig;
 import org.apache.hadoop.hdds.conf.ConfigurationSource;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.hdds.protocol.DatanodeDetails;
@@ -132,7 +133,7 @@ public final class GenesisUtil {
       // writes the version file properties
       scmStore.initialize();
     }
-    return new StorageContainerManager(conf, configurator);
+    return StorageContainerManager.createSCM(conf, configurator);
   }
 
   static void configureSCM(OzoneConfiguration conf, int numHandlers) {
@@ -164,8 +165,7 @@ public final class GenesisUtil {
           Pipeline.newBuilder()
               .setState(Pipeline.PipelineState.OPEN)
               .setId(PipelineID.randomId())
-              .setType(HddsProtos.ReplicationType.RATIS)
-              .setFactor(factor)
+              .setReplicationConfig(new RatisReplicationConfig(factor))
               .setNodes(nodes)
               .build();
       pipelineTable.put(pipeline.getId(),
@@ -180,7 +180,6 @@ public final class GenesisUtil {
     SCMStorageConfig scmStore = new SCMStorageConfig(conf);
     if (omStorage.getState() != Storage.StorageState.INITIALIZED) {
       omStorage.setClusterId(scmStore.getClusterID());
-      omStorage.setScmId(scmStore.getScmId());
       omStorage.setOmId(UUID.randomUUID().toString());
       omStorage.initialize();
     }

@@ -22,7 +22,10 @@ import org.slf4j.LoggerFactory;
 
 import static java.net.HttpURLConnection.HTTP_BAD_REQUEST;
 import static java.net.HttpURLConnection.HTTP_CONFLICT;
+import static java.net.HttpURLConnection.HTTP_FORBIDDEN;
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
+import static java.net.HttpURLConnection.HTTP_PRECON_FAILED;
+import static java.net.HttpURLConnection.HTTP_NOT_IMPLEMENTED;
 import static java.net.HttpURLConnection.HTTP_SERVER_ERROR;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.RANGE_NOT_SATISFIABLE;
 
@@ -32,7 +35,7 @@ import static org.apache.hadoop.ozone.s3.util.S3Consts.RANGE_NOT_SATISFIABLE;
  */
 public final class S3ErrorTable {
 
-  private final static Logger LOG = LoggerFactory.getLogger(
+  private static final Logger LOG = LoggerFactory.getLogger(
       S3ErrorTable.class);
 
   private S3ErrorTable() {
@@ -105,6 +108,17 @@ public final class S3ErrorTable {
       "InternalError", "We encountered an internal error. Please try again.",
       HTTP_SERVER_ERROR);
 
+  public static final OS3Exception ACCESS_DENIED = new OS3Exception(
+      "AccessDenied", "User doesn't have the right to access this " +
+      "resource.", HTTP_FORBIDDEN);
+
+  public static final OS3Exception PRECOND_FAILED = new OS3Exception(
+      "PreconditionFailed", "At least one of the pre-conditions you " +
+      "specified did not hold", HTTP_PRECON_FAILED);
+  
+  public static final OS3Exception NOT_IMPLEMENTED = new OS3Exception(
+      "NotImplemented", "This part of feature is not implemented yet.",
+      HTTP_NOT_IMPLEMENTED);
 
   /**
    * Create a new instance of Error.
@@ -116,7 +130,7 @@ public final class S3ErrorTable {
     OS3Exception err =  new OS3Exception(e.getCode(), e.getErrorMessage(),
         e.getHttpCode());
     err.setResource(resource);
-    LOG.error(err.toXml());
+    LOG.error(err.toXml(), e);
     return err;
   }
 }

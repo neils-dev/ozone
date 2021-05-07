@@ -25,7 +25,6 @@ import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileChecksum;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -41,6 +40,7 @@ import org.apache.hadoop.hdds.annotation.InterfaceAudience;
 import org.apache.hadoop.hdds.annotation.InterfaceStability;
 import org.apache.hadoop.hdds.conf.ConfigurationSource;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
+import org.apache.hadoop.hdds.conf.StorageUnit;
 import org.apache.hadoop.hdds.utils.LegacyHadoopConfigurationSource;
 import org.apache.hadoop.ozone.om.exceptions.OMException;
 import org.apache.hadoop.ozone.om.helpers.OzoneFSUtils;
@@ -72,6 +72,8 @@ import static org.apache.hadoop.fs.ozone.Constants.OZONE_DEFAULT_USER;
 import static org.apache.hadoop.fs.ozone.Constants.OZONE_USER_DIR;
 import static org.apache.hadoop.ozone.OzoneConfigKeys.OZONE_FS_ITERATE_BATCH_SIZE;
 import static org.apache.hadoop.ozone.OzoneConfigKeys.OZONE_FS_ITERATE_BATCH_SIZE_DEFAULT;
+import static org.apache.hadoop.ozone.OzoneConfigKeys.OZONE_SCM_BLOCK_SIZE;
+import static org.apache.hadoop.ozone.OzoneConfigKeys.OZONE_SCM_BLOCK_SIZE_DEFAULT;
 import static org.apache.hadoop.ozone.OzoneConsts.OZONE_URI_DELIMITER;
 import static org.apache.hadoop.ozone.OzoneConsts.OZONE_URI_SCHEME;
 
@@ -106,7 +108,8 @@ public class BasicOzoneFileSystem extends FileSystem {
       "should be one of the following formats: " +
       "o3fs://bucket.volume/key  OR " +
       "o3fs://bucket.volume.om-host.example.com/key  OR " +
-      "o3fs://bucket.volume.om-host.example.com:5678/key";
+      "o3fs://bucket.volume.om-host.example.com:5678/key  OR " +
+      "o3fs://bucket.volume.omServiceId/key";
 
   @Override
   public void initialize(URI name, Configuration conf) throws IOException {
@@ -156,12 +159,7 @@ public class BasicOzoneFileSystem extends FileSystem {
           .build();
       LOG.trace("Ozone URI for ozfs initialization is {}", uri);
 
-      ConfigurationSource source;
-      if (conf instanceof OzoneConfiguration) {
-        source = (ConfigurationSource) conf;
-      } else {
-        source = new LegacyHadoopConfigurationSource(conf);
-      }
+      ConfigurationSource source = getConfSource();
       this.adapter =
           createAdapter(source, bucketStr,
               volumeStr, omHost, omPort);
@@ -381,14 +379,14 @@ public class BasicOzoneFileSystem extends FileSystem {
 
         if (statuses != null && statuses.length > 0) {
           // If dst exists and not a directory not empty
-          throw new FileAlreadyExistsException(String.format(
-              "Failed to rename %s to %s, file already exists or not empty!",
-              src, dst));
+          LOG.warn("Failed to rename {} to {}, file already exists" +
+              " or not empty!", src, dst);
+          return false;
         }
       } else {
         // If dst is not a directory
-        throw new FileAlreadyExistsException(String.format(
-            "Failed to rename %s to %s, file already exists!", src, dst));
+        LOG.warn("Failed to rename {} to {}, file already exists!", src, dst);
+        return false;
       }
     }
 
@@ -408,10 +406,10 @@ public class BasicOzoneFileSystem extends FileSystem {
   }
 
   /**
-   * Intercept rename to trash calls from TrashPolicyDefault,
-   * convert them to delete calls instead.
+   * Intercept rename to trash calls from TrashPolicyDefault.
    */
   @Deprecated
+  @Override
   protected void rename(final Path src, final Path dst,
       final Rename... options) throws IOException {
     boolean hasMoveToTrash = false;
@@ -427,11 +425,7 @@ public class BasicOzoneFileSystem extends FileSystem {
       // if doesn't have TO_TRASH option, just pass the call to super
       super.rename(src, dst, options);
     } else {
-      // intercept when TO_TRASH is found
-      LOG.info("Move to trash is disabled for o3fs, deleting instead: {}. "
-          + "Files or directories will NOT be retained in trash. "
-          + "Ignore the following TrashPolicyDefault message, if any.", src);
-      delete(src, true);
+      rename(src, dst);
     }
   }
 
@@ -705,6 +699,12 @@ public class BasicOzoneFileSystem extends FileSystem {
   }
 
   @Override
+  public long getDefaultBlockSize() {
+    return (long)getConfSource().getStorageSize(
+        OZONE_SCM_BLOCK_SIZE, OZONE_SCM_BLOCK_SIZE_DEFAULT, StorageUnit.BYTES);
+  }
+
+  @Override
   public FileStatus getFileStatus(Path f) throws IOException {
     incrementCounter(Statistic.INVOCATION_GET_FILE_STATUS, 1);
     statistics.incrementReadOps(1);
@@ -766,6 +766,16 @@ public class BasicOzoneFileSystem extends FileSystem {
   }
 
   @Override
+  protected Path fixRelativePart(Path p) {
+    String pathPatternString = p.toUri().getPath();
+    if (pathPatternString.isEmpty()) {
+      return new Path("/");
+    } else {
+      return super.fixRelativePart(p);
+    }
+  }
+   
+  @Override
   public FileStatus[] globStatus(Path pathPattern) throws IOException {
     incrementCounter(Statistic.INVOCATION_GLOB_STATUS);
     return super.globStatus(pathPattern);
@@ -820,10 +830,8 @@ public class BasicOzoneFileSystem extends FileSystem {
     // removing leading '/' char
     String key = path.toUri().getPath();
 
-    if (OzoneFSUtils.isValidName(key)) {
-      key = path.toUri().getPath();
-    } else {
-      throw new InvalidPathException("Invalid path Name" + key);
+    if (!OzoneFSUtils.isValidName(key)) {
+      throw new InvalidPathException("Invalid path Name " + key);
     }
     LOG.trace("path for key:{} is:{}", key, path);
     return key.substring(1);
@@ -841,6 +849,17 @@ public class BasicOzoneFileSystem extends FileSystem {
     } else {
       return key;
     }
+  }
+
+  public ConfigurationSource getConfSource() {
+    Configuration conf = super.getConf();
+    ConfigurationSource source;
+    if (conf instanceof OzoneConfiguration) {
+      source = (ConfigurationSource) conf;
+    } else {
+      source = new LegacyHadoopConfigurationSource(conf);
+    }
+    return source;
   }
 
   @Override

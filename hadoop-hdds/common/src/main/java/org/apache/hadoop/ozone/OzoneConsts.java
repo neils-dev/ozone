@@ -23,6 +23,9 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.ratis.thirdparty.io.grpc.Context;
 import org.apache.ratis.thirdparty.io.grpc.Metadata;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
 import java.util.regex.Pattern;
 
 import static org.apache.ratis.thirdparty.io.grpc.Metadata.ASCII_STRING_MARSHALLER;
@@ -36,6 +39,10 @@ public final class OzoneConsts {
 
   public static final String STORAGE_DIR = "scm";
   public static final String SCM_ID = "scmUuid";
+  public static final String SCM_HA = "scmHA";
+  public static final String CLUSTER_ID_PREFIX = "CID-";
+  public static final String SCM_CERT_SERIAL_ID = "scmCertSerialId";
+  public static final String PRIMARY_SCM_NODE_ID = "primaryScmNodeId";
 
   public static final String OZONE_SIMPLE_ROOT_USER = "root";
   public static final String OZONE_SIMPLE_HDFS_USER = "hdfs";
@@ -106,7 +113,7 @@ public final class OzoneConsts {
 
   public static final String FILE_HASH = "SHA-256";
   public static final String MD5_HASH = "MD5";
-  public final static String CHUNK_OVERWRITE = "OverWriteRequested";
+  public static final String CHUNK_OVERWRITE = "OverWriteRequested";
 
   public static final int CHUNK_SIZE = 1 * 1024 * 1024; // 1 MB
   public static final long KB = 1024L;
@@ -119,9 +126,14 @@ public final class OzoneConsts {
    */
   public static final String CONTAINER_DB_SUFFIX = "container.db";
   public static final String PIPELINE_DB_SUFFIX = "pipeline.db";
+  public static final String CRL_DB_SUFFIX = "crl.db";
   public static final String DN_CONTAINER_DB = "-dn-"+ CONTAINER_DB_SUFFIX;
+  public static final String DN_CRL_DB = "dn-"+ CRL_DB_SUFFIX;
+  public static final String CRL_DB_DIRECTORY_NAME = "crl";
   public static final String OM_DB_NAME = "om.db";
+  public static final String SCM_DB_NAME = "scm.db";
   public static final String OM_DB_BACKUP_PREFIX = "om.db.backup.";
+  public static final String SCM_DB_BACKUP_PREFIX = "scm.db.backup.";
 
   public static final String STORAGE_DIR_CHUNKS = "chunks";
   public static final String OZONE_DB_CHECKPOINT_REQUEST_FLUSH =
@@ -194,11 +206,12 @@ public final class OzoneConsts {
    * Quota RESET default is -1, which means quota is not set.
    */
   public static final long QUOTA_RESET = -1;
+  public static final long OLD_QUOTA_DEFAULT = -2;
 
   /**
    * Quota Units.
    */
-  public enum Units {TB, GB, MB, KB, BYTES}
+  public enum Units {TB, GB, MB, KB, B}
 
   /**
    * Max number of keys returned per list buckets operation.
@@ -227,6 +240,8 @@ public final class OzoneConsts {
   // instance gets stored.
   public static final String OM_CONTEXT_ATTRIBUTE = "ozone.om";
 
+  public static final String SCM_CONTEXT_ATTRIBUTE = "ozone.scm";
+
   private OzoneConsts() {
     // Never Constructed
   }
@@ -252,10 +267,14 @@ public final class OzoneConsts {
   // versions, requiring this property to be tracked on a per container basis.
   // V1: All data in default column family.
   public static final String SCHEMA_V1 = "1";
-  // V2: Metadata, block data, and deleted blocks in their own column families.
+  // V2: Metadata, block data, and delete transactions in their own
+  // column families.
   public static final String SCHEMA_V2 = "2";
   // Most recent schema version that all new containers should be created with.
   public static final String SCHEMA_LATEST = SCHEMA_V2;
+
+  public static final String[] SCHEMA_VERSIONS =
+      new String[] {SCHEMA_V1, SCHEMA_V2};
 
   // Supported store types.
   public static final String OZONE = "ozone";
@@ -268,8 +287,9 @@ public final class OzoneConsts {
   public static final String SRC_KEY = "srcKey";
   public static final String DST_KEY = "dstKey";
   public static final String USED_BYTES = "usedBytes";
+  public static final String USED_NAMESPACE = "usedNamespace";
   public static final String QUOTA_IN_BYTES = "quotaInBytes";
-  public static final String QUOTA_IN_COUNTS = "quotaInCounts";
+  public static final String QUOTA_IN_NAMESPACE = "quotaInNamespace";
   public static final String OBJECT_ID = "objectID";
   public static final String UPDATE_ID = "updateID";
   public static final String CLIENT_ID = "clientID";
@@ -336,9 +356,7 @@ public final class OzoneConsts {
 
   // Default OMServiceID for OM Ratis servers to use as RaftGroupId
   public static final String OM_SERVICE_ID_DEFAULT = "omServiceIdDefault";
-
-  // Dummy OMNodeID for OM Clients to use for a non-HA OM setup
-  public static final String OM_NODE_ID_DUMMY = "omNodeIdDummy";
+  public static final String OM_DEFAULT_NODE_ID = "om1";
 
   public static final String JAVA_TMP_DIR = "java.io.tmpdir";
   public static final String LOCALHOST = "localhost";
@@ -351,7 +369,7 @@ public final class OzoneConsts {
   public static final String GDPR_FLAG = "gdprEnabled";
   public static final String GDPR_ALGORITHM_NAME = "AES";
   public static final int GDPR_DEFAULT_RANDOM_SECRET_LENGTH = 16;
-  public static final String GDPR_CHARSET = "UTF-8";
+  public static final Charset GDPR_CHARSET = StandardCharsets.UTF_8;
   public static final String GDPR_LENGTH = "length";
   public static final String GDPR_SECRET = "secret";
   public static final String GDPR_ALGORITHM = "algorithm";
@@ -379,6 +397,48 @@ public final class OzoneConsts {
   public static final String CONTAINER_DB_TYPE_ROCKSDB = "RocksDB";
   public static final String CONTAINER_DB_TYPE_LEVELDB = "LevelDB";
 
+  // SCM HA
+  public static final String SCM_SERVICE_ID_DEFAULT = "scmServiceIdDefault";
+
+  // SCM Ratis snapshot file to store the last applied index
+  public static final String SCM_RATIS_SNAPSHOT_INDEX = "scmRatisSnapshotIndex";
+
+  public static final String SCM_RATIS_SNAPSHOT_TERM = "scmRatisSnapshotTerm";
   // An on-disk transient marker file used when replacing DB with checkpoint
   public static final String DB_TRANSIENT_MARKER = "dbInconsistentMarker";
+
+
+  // TODO : rename this to OZONE_RATIS_SNAPSHOT_DIR and use it in both
+  // SCM and OM
+  public static final String OM_RATIS_SNAPSHOT_DIR = "snapshot";
+  public static final String SCM_RATIS_SNAPSHOT_DIR = "snapshot";
+
+  public static final long DEFAULT_OM_UPDATE_ID = -1L;
+
+
+  // SCM default service Id and node Id in non-HA where config is not defined
+  // in non-HA style.
+  public static final String SCM_DUMMY_NODEID = "scmNodeId";
+  public static final String SCM_DUMMY_SERVICE_ID = "scmServiceId";
+
+  // CRL Sequence Id
+  public static final String CRL_SEQUENCE_ID_KEY = "CRL_SEQUENCE_ID";
+
+  public static final String SCM_CA_PATH = "ca";
+  public static final String SCM_CA_CERT_STORAGE_DIR = "scm";
+  public static final String SCM_SUB_CA_PATH = "sub-ca";
+
+  public static final String SCM_ROOT_CA_COMPONENT_NAME =
+      Paths.get(SCM_CA_CERT_STORAGE_DIR, SCM_CA_PATH).toString();
+
+  public static final String SCM_SUB_CA_PREFIX = "scm-sub@";
+  public static final String SCM_ROOT_CA_PREFIX = "scm@";
+
+  // Kerberos constants
+  public static final String KERBEROS_CONFIG_VALUE = "kerberos";
+  public static final String HTTP_AUTH_TYPE_SUFFIX = "http.auth.type";
+  public static final String OZONE_SECURITY_ENABLED_SECURE = "true";
+  public static final String OZONE_HTTP_SECURITY_ENABLED_SECURE = "true";
+  public static final String OZONE_HTTP_FILTER_INITIALIZERS_SECURE =
+      "org.apache.hadoop.security.AuthenticationFilterInitializer";
 }

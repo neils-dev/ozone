@@ -68,41 +68,56 @@ public final class ConfigurationReflectionUtil {
 
         String key = prefix + "." + configAnnotation.key();
 
+        String defaultValue = configAnnotation.defaultValue();
+
         ConfigType type = configAnnotation.type();
 
         if (type == ConfigType.AUTO) {
           type = detectConfigType(field.getType(), fieldLocation);
         }
 
-        //Note: default value is handled by ozone-default.xml. Here we can
-        //use any default.
         try {
           switch (type) {
           case STRING:
-            forcedFieldSet(field, configuration, from.get(key));
+            forcedFieldSet(field, configuration, from.get(key, defaultValue));
             break;
           case INT:
-            forcedFieldSet(field, configuration, from.getInt(key, 0));
+            forcedFieldSet(field, configuration,
+                from.getInt(key, Integer.parseInt(defaultValue)));
             break;
           case BOOLEAN:
-            forcedFieldSet(field, configuration, from.getBoolean(key, false));
+            forcedFieldSet(field, configuration,
+                from.getBoolean(key, Boolean.parseBoolean(defaultValue)));
             break;
           case LONG:
-            forcedFieldSet(field, configuration, from.getLong(key, 0));
+            forcedFieldSet(field, configuration,
+                from.getLong(key, Long.parseLong(defaultValue)));
             break;
           case TIME:
             forcedFieldSet(field, configuration,
-                from.getTimeDuration(key, "0s", configAnnotation.timeUnit()));
+                from.getTimeDuration(key, defaultValue,
+                    configAnnotation.timeUnit()));
+            break;
+          case SIZE:
+            final long value =
+                Math.round(from.getStorageSize(key,
+                    defaultValue, StorageUnit.BYTES));
+            if (field.getType() == int.class) {
+              forcedFieldSet(field, configuration, (int) value);
+            } else {
+              forcedFieldSet(field, configuration, value);
+
+            }
             break;
           case CLASS:
             forcedFieldSet(field, configuration,
-                from.getClass(key, Object.class));
+                from.getClass(key, Class.forName(defaultValue)));
             break;
           default:
             throw new ConfigurationException(
                 "Unsupported ConfigType " + type + " on " + fieldLocation);
           }
-        } catch (IllegalAccessException e) {
+        } catch (IllegalAccessException | ClassNotFoundException e) {
           throw new ConfigurationException(
               "Can't inject configuration to " + fieldLocation, e);
         }
@@ -232,6 +247,10 @@ public final class ConfigurationReflectionUtil {
           case TIME:
             config.setTimeDuration(key, field.getLong(configObject),
                 configAnnotation.timeUnit());
+            break;
+          case SIZE:
+            config.setStorageSize(key, field.getLong(configObject),
+                StorageUnit.BYTES);
             break;
           case CLASS:
             Object valueClass = field.get(configObject);

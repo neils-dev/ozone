@@ -18,6 +18,7 @@
 package org.apache.hadoop.ozone.client.rpc;
 
 import java.io.IOException;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,6 +34,7 @@ import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.hdds.protocol.DatanodeDetails;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.ratis.conf.RatisClientConfig;
+import org.apache.hadoop.hdds.scm.OzoneClientConfig;
 import org.apache.hadoop.hdds.scm.ScmConfigKeys;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
@@ -73,7 +75,7 @@ public class TestFailureHandlingByClient {
     * Set a timeout for each test.
     */
   @Rule
-  public Timeout timeout = new Timeout(300000);
+  public Timeout timeout = Timeout.seconds(300);
 
   private MiniOzoneCluster cluster;
   private OzoneConfiguration conf;
@@ -122,8 +124,10 @@ public class TestFailureHandlingByClient {
     raftClientConfig.setRpcWatchRequestTimeout(Duration.ofSeconds(3));
     conf.setFromObject(raftClientConfig);
 
-    conf.setBoolean(
-        OzoneConfigKeys.OZONE_CLIENT_STREAM_BUFFER_FLUSH_DELAY, false);
+    OzoneClientConfig clientConfig = conf.getObject(OzoneClientConfig.class);
+    clientConfig.setStreamBufferFlushDelay(false);
+    conf.setFromObject(clientConfig);
+
     conf.setQuietMode(false);
     conf.setClass(NET_TOPOLOGY_NODE_SWITCH_MAPPING_IMPL_KEY,
         StaticMapping.class, DNSToSwitchMapping.class);
@@ -164,7 +168,8 @@ public class TestFailureHandlingByClient {
     OzoneOutputStream key = createKey(keyName, ReplicationType.RATIS, 0);
     byte[] data =
         ContainerTestHelper
-        .getFixedLengthString(keyString, chunkSize + chunkSize / 2).getBytes();
+        .getFixedLengthString(keyString, chunkSize + chunkSize / 2).getBytes(
+            UTF_8);
     key.write(data);
 
     // get the name of a valid container
@@ -177,7 +182,7 @@ public class TestFailureHandlingByClient {
     long containerId = locationInfoList.get(0).getContainerID();
     ContainerInfo container = cluster.getStorageContainerManager()
         .getContainerManager()
-        .getContainer(ContainerID.valueof(containerId));
+        .getContainer(ContainerID.valueOf(containerId));
     Pipeline pipeline =
         cluster.getStorageContainerManager().getPipelineManager()
             .getPipeline(container.getPipelineID());
@@ -206,7 +211,7 @@ public class TestFailureHandlingByClient {
         createKey(keyName, ReplicationType.RATIS, 0);
     String data = ContainerTestHelper
         .getFixedLengthString(keyString,  chunkSize/2);
-    key.write(data.getBytes());
+    key.write(data.getBytes(UTF_8));
     // get the name of a valid container
     Assert.assertTrue(key.getOutputStream() instanceof KeyOutputStream);
     KeyOutputStream keyOutputStream =
@@ -217,7 +222,7 @@ public class TestFailureHandlingByClient {
     BlockID blockId = locationInfoList.get(0).getBlockID();
     ContainerInfo container =
         cluster.getStorageContainerManager().getContainerManager()
-            .getContainer(ContainerID.valueof(containerId));
+            .getContainer(ContainerID.valueOf(containerId));
     Pipeline pipeline =
         cluster.getStorageContainerManager().getPipelineManager()
             .getPipeline(container.getPipelineID());
@@ -239,8 +244,9 @@ public class TestFailureHandlingByClient {
     Assert.assertNotEquals(
         keyInfo.getLatestVersionLocations().getBlocksLatestVersionOnly().get(0)
             .getBlockID(), blockId);
-    Assert.assertEquals(data.getBytes().length, keyInfo.getDataSize());
-    validateData(keyName, data.getBytes());
+    Assert.assertEquals(data.getBytes(UTF_8).length,
+        keyInfo.getDataSize());
+    validateData(keyName, data.getBytes(UTF_8));
   }
 
 
@@ -263,7 +269,7 @@ public class TestFailureHandlingByClient {
 
     // Assert that 1 block will be preallocated
     Assert.assertEquals(1, streamEntryList.size());
-    key.write(data.getBytes());
+    key.write(data.getBytes(UTF_8));
     key.flush();
     long containerId = streamEntryList.get(0).getBlockID().getContainerID();
     BlockID blockId = streamEntryList.get(0).getBlockID();
@@ -276,11 +282,11 @@ public class TestFailureHandlingByClient {
 
     // This write will hit ClosedContainerException and this container should
     // will be added in the excludelist
-    key.write(data.getBytes());
+    key.write(data.getBytes(UTF_8));
     key.flush();
 
     Assert.assertTrue(keyOutputStream.getExcludeList().getContainerIds()
-        .contains(ContainerID.valueof(containerId)));
+        .contains(ContainerID.valueOf(containerId)));
     Assert.assertTrue(
         keyOutputStream.getExcludeList().getDatanodes().isEmpty());
     Assert.assertTrue(
@@ -299,8 +305,9 @@ public class TestFailureHandlingByClient {
     Assert.assertNotEquals(
         keyInfo.getLatestVersionLocations().getBlocksLatestVersionOnly().get(0)
             .getBlockID(), blockId);
-    Assert.assertEquals(2 * data.getBytes().length, keyInfo.getDataSize());
-    validateData(keyName, data.concat(data).getBytes());
+    Assert.assertEquals(2 * data.getBytes(UTF_8).length,
+        keyInfo.getDataSize());
+    validateData(keyName, data.concat(data).getBytes(UTF_8));
   }
 
   @Test
@@ -322,13 +329,13 @@ public class TestFailureHandlingByClient {
 
     // Assert that 1 block will be preallocated
     Assert.assertEquals(1, streamEntryList.size());
-    key.write(data.getBytes());
+    key.write(data.getBytes(UTF_8));
     key.flush();
     long containerId = streamEntryList.get(0).getBlockID().getContainerID();
     BlockID blockId = streamEntryList.get(0).getBlockID();
     ContainerInfo container =
         cluster.getStorageContainerManager().getContainerManager()
-            .getContainer(ContainerID.valueof(containerId));
+            .getContainer(ContainerID.valueOf(containerId));
     Pipeline pipeline =
         cluster.getStorageContainerManager().getPipelineManager()
             .getPipeline(container.getPipelineID());
@@ -338,8 +345,8 @@ public class TestFailureHandlingByClient {
     // next write ops.
     cluster.shutdownHddsDatanode(datanodes.get(0));
 
-    key.write(data.getBytes());
-    key.write(data.getBytes());
+    key.write(data.getBytes(UTF_8));
+    key.write(data.getBytes(UTF_8));
     key.flush();
 
     Assert.assertTrue(keyOutputStream.getExcludeList().getDatanodes()
@@ -362,8 +369,8 @@ public class TestFailureHandlingByClient {
     Assert.assertNotEquals(
         keyInfo.getLatestVersionLocations().getBlocksLatestVersionOnly().get(0)
             .getBlockID(), blockId);
-    Assert.assertEquals(3 * data.getBytes().length, keyInfo.getDataSize());
-    validateData(keyName, data.concat(data).concat(data).getBytes());
+    Assert.assertEquals(3 * data.getBytes(UTF_8).length, keyInfo.getDataSize());
+    validateData(keyName, data.concat(data).concat(data).getBytes(UTF_8));
   }
 
 
@@ -385,13 +392,13 @@ public class TestFailureHandlingByClient {
 
     // Assert that 1 block will be preallocated
     Assert.assertEquals(1, streamEntryList.size());
-    key.write(data.getBytes());
+    key.write(data.getBytes(UTF_8));
     key.flush();
     long containerId = streamEntryList.get(0).getBlockID().getContainerID();
     BlockID blockId = streamEntryList.get(0).getBlockID();
     ContainerInfo container =
         cluster.getStorageContainerManager().getContainerManager()
-            .getContainer(ContainerID.valueof(containerId));
+            .getContainer(ContainerID.valueOf(containerId));
     Pipeline pipeline =
         cluster.getStorageContainerManager().getPipelineManager()
             .getPipeline(container.getPipelineID());
@@ -402,8 +409,8 @@ public class TestFailureHandlingByClient {
     cluster.shutdownHddsDatanode(datanodes.get(0));
     cluster.shutdownHddsDatanode(datanodes.get(1));
 
-    key.write(data.getBytes());
-    key.write(data.getBytes());
+    key.write(data.getBytes(UTF_8));
+    key.write(data.getBytes(UTF_8));
     key.flush();
     Assert.assertTrue(keyOutputStream.getExcludeList().getPipelineIds()
         .contains(pipeline.getId()));
@@ -425,8 +432,8 @@ public class TestFailureHandlingByClient {
     Assert.assertNotEquals(
         keyInfo.getLatestVersionLocations().getBlocksLatestVersionOnly().get(0)
             .getBlockID(), blockId);
-    Assert.assertEquals(3 * data.getBytes().length, keyInfo.getDataSize());
-    validateData(keyName, data.concat(data).concat(data).getBytes());
+    Assert.assertEquals(3 * data.getBytes(UTF_8).length, keyInfo.getDataSize());
+    validateData(keyName, data.concat(data).concat(data).getBytes(UTF_8));
   }
 
   private OzoneOutputStream createKey(String keyName, ReplicationType type,

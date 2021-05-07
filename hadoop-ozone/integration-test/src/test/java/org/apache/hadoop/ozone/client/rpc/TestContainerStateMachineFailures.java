@@ -17,6 +17,19 @@
 
 package org.apache.hadoop.ozone.client.rpc;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.hdds.client.ReplicationFactor;
 import org.apache.hadoop.hdds.client.ReplicationType;
@@ -25,6 +38,7 @@ import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.ratis.conf.RatisClientConfig;
+import org.apache.hadoop.hdds.scm.OzoneClientConfig;
 import org.apache.hadoop.hdds.scm.XceiverClientManager;
 import org.apache.hadoop.hdds.scm.XceiverClientSpi;
 import org.apache.hadoop.hdds.scm.client.HddsClientUtils;
@@ -44,49 +58,29 @@ import org.apache.hadoop.ozone.container.TestHelper;
 import org.apache.hadoop.ozone.container.common.impl.ContainerData;
 import org.apache.hadoop.ozone.container.common.impl.ContainerDataYaml;
 import org.apache.hadoop.ozone.container.common.impl.HddsDispatcher;
-import org.apache.hadoop.ozone.container.common.transport.server.ratis.
-        ContainerStateMachine;
+import org.apache.hadoop.ozone.container.common.transport.server.ratis.ContainerStateMachine;
 import org.apache.hadoop.ozone.container.keyvalue.KeyValueContainerData;
 import org.apache.hadoop.ozone.container.ozoneimpl.OzoneContainer;
 import org.apache.hadoop.ozone.om.helpers.OmKeyLocationInfo;
 import org.apache.hadoop.test.LambdaTestUtils;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_COMMAND_STATUS_REPORT_INTERVAL;
+import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_CONTAINER_REPORT_INTERVAL;
+import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_PIPELINE_REPORT_INTERVAL;
+import static org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.ContainerDataProto.State.UNHEALTHY;
+import static org.apache.hadoop.hdds.scm.ScmConfigKeys.OZONE_SCM_PIPELINE_DESTROY_TIMEOUT;
+import static org.apache.hadoop.hdds.scm.ScmConfigKeys.OZONE_SCM_STALENODE_INTERVAL;
 import org.apache.ratis.protocol.exceptions.StateMachineException;
 import org.apache.ratis.server.storage.FileInfo;
 import org.apache.ratis.statemachine.impl.SimpleStateMachineStorage;
-
+import static org.hamcrest.core.Is.is;
 import org.junit.AfterClass;
 import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.apache.hadoop.hdds.HddsConfigKeys.
-    HDDS_COMMAND_STATUS_REPORT_INTERVAL;
-import static org.apache.hadoop.hdds.HddsConfigKeys.
-    HDDS_CONTAINER_REPORT_INTERVAL;
-import static org.apache.hadoop.hdds.HddsConfigKeys
-    .HDDS_PIPELINE_REPORT_INTERVAL;
-import static org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.
-    ContainerDataProto.State.UNHEALTHY;
-import static org.apache.hadoop.hdds.scm.ScmConfigKeys.
-    OZONE_SCM_STALENODE_INTERVAL;
-import static org.apache.hadoop.hdds.scm.ScmConfigKeys.
-    OZONE_SCM_PIPELINE_DESTROY_TIMEOUT;
-import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 /**
  * Tests the containerStateMachine failure handling.
@@ -101,6 +95,7 @@ public class TestContainerStateMachineFailures {
   private static String volumeName;
   private static String bucketName;
   private static XceiverClientManager xceiverClientManager;
+  private static Random random;
 
   /**
    * Create a MiniDFSCluster for testing.
@@ -110,8 +105,11 @@ public class TestContainerStateMachineFailures {
   @BeforeClass
   public static void init() throws Exception {
     conf = new OzoneConfiguration();
-    conf.setBoolean(OzoneConfigKeys.
-            OZONE_CLIENT_STREAM_BUFFER_FLUSH_DELAY, false);
+
+    OzoneClientConfig clientConfig = conf.getObject(OzoneClientConfig.class);
+    clientConfig.setStreamBufferFlushDelay(false);
+    conf.setFromObject(clientConfig);
+
     conf.setTimeDuration(HDDS_CONTAINER_REPORT_INTERVAL, 200,
         TimeUnit.MILLISECONDS);
     conf.setTimeDuration(HDDS_COMMAND_STATUS_REPORT_INTERVAL, 200,
@@ -155,6 +153,7 @@ public class TestContainerStateMachineFailures {
     bucketName = volumeName;
     objectStore.createVolume(volumeName);
     objectStore.getVolume(volumeName).createBucket(bucketName);
+    random = new Random();
   }
 
   /**
@@ -173,7 +172,7 @@ public class TestContainerStateMachineFailures {
             objectStore.getVolume(volumeName).getBucket(bucketName)
                     .createKey("ratis", 1024, ReplicationType.RATIS,
                             ReplicationFactor.ONE, new HashMap<>());
-    byte[] testData = "ratis".getBytes();
+    byte[] testData = "ratis".getBytes(UTF_8);
     // First write and flush creates a container in the datanode
     key.write(testData);
     key.flush();
@@ -230,9 +229,9 @@ public class TestContainerStateMachineFailures {
                     .createKey("ratis", 1024, ReplicationType.RATIS,
                             ReplicationFactor.ONE, new HashMap<>());
     // First write and flush creates a container in the datanode
-    key.write("ratis".getBytes());
+    key.write("ratis".getBytes(UTF_8));
     key.flush();
-    key.write("ratis".getBytes());
+    key.write("ratis".getBytes(UTF_8));
     KeyOutputStream groupOutputStream = (KeyOutputStream) key
             .getOutputStream();
     List<OmKeyLocationInfo> locationInfoList =
@@ -314,9 +313,9 @@ public class TestContainerStateMachineFailures {
                     .createKey("ratis", 1024, ReplicationType.RATIS,
                             ReplicationFactor.ONE, new HashMap<>());
     // First write and flush creates a container in the datanode
-    key.write("ratis".getBytes());
+    key.write("ratis".getBytes(UTF_8));
     key.flush();
-    key.write("ratis".getBytes());
+    key.write("ratis".getBytes(UTF_8));
     KeyOutputStream groupOutputStream = (KeyOutputStream) key.
             getOutputStream();
     List<OmKeyLocationInfo> locationInfoList =
@@ -404,9 +403,9 @@ public class TestContainerStateMachineFailures {
                     .createKey("ratis", 1024, ReplicationType.RATIS,
                             ReplicationFactor.ONE, new HashMap<>());
     // First write and flush creates a container in the datanode
-    key.write("ratis".getBytes());
+    key.write("ratis".getBytes(UTF_8));
     key.flush();
-    key.write("ratis".getBytes());
+    key.write("ratis".getBytes(UTF_8));
     KeyOutputStream groupOutputStream = (KeyOutputStream) key.getOutputStream();
     List<OmKeyLocationInfo> locationInfoList =
             groupOutputStream.getLocationInfoList();
@@ -477,9 +476,9 @@ public class TestContainerStateMachineFailures {
                     .createKey("ratis-1", 1024, ReplicationType.RATIS,
                             ReplicationFactor.ONE, new HashMap<>());
     // First write and flush creates a container in the datanode
-    key.write("ratis".getBytes());
+    key.write("ratis".getBytes(UTF_8));
     key.flush();
-    key.write("ratis".getBytes());
+    key.write("ratis".getBytes(UTF_8));
     KeyOutputStream groupOutputStream = (KeyOutputStream) key
             .getOutputStream();
     List<OmKeyLocationInfo> locationInfoList =
@@ -534,7 +533,7 @@ public class TestContainerStateMachineFailures {
       try {
         xceiverClient.sendCommand(ContainerTestHelper
                 .getWriteChunkRequest(pipeline, omKeyLocationInfo.getBlockID(),
-                        1024, new Random().nextInt(), null));
+                        1024, random.nextInt(), null));
         latch.countDown();
       } catch (IOException e) {
         latch.countDown();

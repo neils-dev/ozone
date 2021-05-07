@@ -27,11 +27,13 @@ import java.util.UUID;
 
 import com.google.common.base.Optional;
 import org.apache.hadoop.hdds.client.BlockID;
+import org.apache.hadoop.hdds.client.ReplicationConfig;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.scm.pipeline.Pipeline;
 import org.apache.hadoop.hdds.scm.pipeline.PipelineID;
 import org.apache.hadoop.ozone.OmUtils;
 import org.apache.hadoop.ozone.OzoneAcl;
+import org.apache.hadoop.ozone.OzoneConsts;
 import org.apache.hadoop.ozone.om.OMMetadataManager;
 import org.apache.hadoop.ozone.om.helpers.OmBucketInfo;
 import org.apache.hadoop.ozone.om.helpers.OmKeyInfo;
@@ -114,6 +116,33 @@ public final class TestOMRequestUtils {
    * @param replicationType
    * @param replicationFactor
    * @param omMetadataManager
+   * @param locationList
+   * @throws Exception
+   */
+  @SuppressWarnings("parameterNumber")
+  public static void addKeyToTable(boolean openKeyTable, String volumeName,
+      String bucketName, String keyName, long clientID,
+      HddsProtos.ReplicationType replicationType,
+      HddsProtos.ReplicationFactor replicationFactor,
+      OMMetadataManager omMetadataManager,
+      List<OmKeyLocationInfo> locationList) throws Exception {
+    addKeyToTable(openKeyTable, false, volumeName, bucketName, keyName,
+        clientID, replicationType, replicationFactor, 0L, omMetadataManager,
+        locationList);
+  }
+
+
+  /**
+   * Add key entry to KeyTable. if openKeyTable flag is true, add's entries
+   * to openKeyTable, else add's it to keyTable.
+   * @param openKeyTable
+   * @param volumeName
+   * @param bucketName
+   * @param keyName
+   * @param clientID
+   * @param replicationType
+   * @param replicationFactor
+   * @param omMetadataManager
    * @throws Exception
    */
   @SuppressWarnings("parameterNumber")
@@ -136,14 +165,34 @@ public final class TestOMRequestUtils {
       String volumeName, String bucketName, String keyName, long clientID,
       HddsProtos.ReplicationType replicationType,
       HddsProtos.ReplicationFactor replicationFactor, long trxnLogIndex,
+      OMMetadataManager omMetadataManager,
+      List<OmKeyLocationInfo> locationList) throws Exception {
+
+    OmKeyInfo omKeyInfo = createOmKeyInfo(volumeName, bucketName, keyName,
+        replicationType, replicationFactor, trxnLogIndex);
+    omKeyInfo.appendNewBlocks(locationList, false);
+
+    addKeyToTable(openKeyTable, addToCache, omKeyInfo, clientID, trxnLogIndex,
+            omMetadataManager);
+  }
+
+  /**
+   * Add key entry to KeyTable. if openKeyTable flag is true, add's entries
+   * to openKeyTable, else add's it to keyTable.
+   * @throws Exception
+   */
+  @SuppressWarnings("parameternumber")
+  public static void addKeyToTable(boolean openKeyTable, boolean addToCache,
+      String volumeName, String bucketName, String keyName, long clientID,
+      HddsProtos.ReplicationType replicationType,
+      HddsProtos.ReplicationFactor replicationFactor, long trxnLogIndex,
       OMMetadataManager omMetadataManager) throws Exception {
 
     OmKeyInfo omKeyInfo = createOmKeyInfo(volumeName, bucketName, keyName,
         replicationType, replicationFactor, trxnLogIndex);
 
     addKeyToTable(openKeyTable, addToCache, omKeyInfo, clientID, trxnLogIndex,
-            omMetadataManager);
-
+        omMetadataManager);
   }
 
   /**
@@ -215,8 +264,8 @@ public final class TestOMRequestUtils {
     Pipeline pipeline = Pipeline.newBuilder()
         .setState(Pipeline.PipelineState.OPEN)
         .setId(PipelineID.randomId())
-        .setType(keyInfo.getType())
-        .setFactor(keyInfo.getFactor())
+        .setReplicationConfig(ReplicationConfig
+            .fromTypeAndFactor(keyInfo.getType(), keyInfo.getFactor()))
         .setNodes(new ArrayList<>())
         .build();
 
@@ -297,7 +346,7 @@ public final class TestOMRequestUtils {
         OmVolumeArgs.newBuilder().setCreationTime(Time.now())
             .setVolume(volumeName).setAdminName(volumeName)
             .setOwnerName(volumeName).setQuotaInBytes(quotaInBytes)
-            .setQuotaInCounts(10000L).build();
+            .setQuotaInNamespace(10000L).build();
     omMetadataManager.getVolumeTable().put(
         omMetadataManager.getVolumeKey(volumeName), omVolumeArgs);
 
@@ -320,7 +369,7 @@ public final class TestOMRequestUtils {
         OmVolumeArgs.newBuilder().setCreationTime(Time.now())
             .setVolume(volumeName).setAdminName(ownerName)
             .setOwnerName(ownerName).setQuotaInBytes(Long.MAX_VALUE)
-            .setQuotaInCounts(10000L).build();
+            .setQuotaInNamespace(10000L).build();
     omMetadataManager.getVolumeTable().put(
         omMetadataManager.getVolumeKey(volumeName), omVolumeArgs);
 
@@ -453,15 +502,15 @@ public final class TestOMRequestUtils {
    * Create OMRequest for set volume property request with quota set.
    * @param volumeName
    * @param quotaInBytes
-   * @param quotaInCounts
+   * @param quotaInNamespace
    * @return OMRequest
    */
   public static OMRequest createSetVolumePropertyRequest(String volumeName,
-      long quotaInBytes, long quotaInCounts) {
+      long quotaInBytes, long quotaInNamespace) {
     SetVolumePropertyRequest setVolumePropertyRequest =
         SetVolumePropertyRequest.newBuilder().setVolumeName(volumeName)
             .setQuotaInBytes(quotaInBytes)
-            .setQuotaInCounts(quotaInCounts)
+            .setQuotaInNamespace(quotaInNamespace)
             .setModificationTime(Time.now()).build();
 
     return OMRequest.newBuilder().setClientId(UUID.randomUUID().toString())
@@ -702,7 +751,8 @@ public final class TestOMRequestUtils {
       String adminName, String ownerName) {
     OzoneManagerProtocolProtos.VolumeInfo volumeInfo =
         OzoneManagerProtocolProtos.VolumeInfo.newBuilder().setVolume(volumeName)
-        .setAdminName(adminName).setOwnerName(ownerName).build();
+        .setAdminName(adminName).setOwnerName(ownerName)
+        .setQuotaInNamespace(OzoneConsts.QUOTA_RESET).build();
     OzoneManagerProtocolProtos.CreateVolumeRequest createVolumeRequest =
         OzoneManagerProtocolProtos.CreateVolumeRequest.newBuilder()
             .setVolumeInfo(volumeInfo).build();

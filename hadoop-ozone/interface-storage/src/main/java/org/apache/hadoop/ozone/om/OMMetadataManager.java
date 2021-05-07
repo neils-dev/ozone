@@ -17,11 +17,16 @@
 package org.apache.hadoop.ozone.om;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
+import org.apache.hadoop.hdds.utils.DBStoreHAManager;
+import org.apache.hadoop.hdds.utils.db.TableIterator;
+import org.apache.hadoop.hdds.utils.db.cache.CacheKey;
+import org.apache.hadoop.hdds.utils.db.cache.CacheValue;
 import org.apache.hadoop.ozone.common.BlockGroup;
 import org.apache.hadoop.ozone.om.helpers.OmBucketInfo;
 import org.apache.hadoop.ozone.om.helpers.OmKeyInfo;
@@ -31,7 +36,7 @@ import org.apache.hadoop.ozone.om.helpers.OmVolumeArgs;
 import org.apache.hadoop.ozone.om.helpers.RepeatedOmKeyInfo;
 import org.apache.hadoop.ozone.om.helpers.S3SecretValue;
 import org.apache.hadoop.ozone.om.lock.OzoneManagerLock;
-import org.apache.hadoop.ozone.om.ratis.OMTransactionInfo;
+import org.apache.hadoop.hdds.utils.TransactionInfo;
 import org.apache.hadoop.ozone.storage.proto.
     OzoneManagerStorageProtos.PersistedUserVolumeInfo;
 import org.apache.hadoop.ozone.security.OzoneTokenIdentifier;
@@ -43,7 +48,7 @@ import com.google.common.annotations.VisibleForTesting;
 /**
  * OM metadata manager interface.
  */
-public interface OMMetadataManager {
+public interface OMMetadataManager extends DBStoreHAManager {
   /**
    * Start metadata manager.
    *
@@ -71,6 +76,11 @@ public interface OMMetadataManager {
    * @return OzoneManagerLock
    */
   OzoneManagerLock getLock();
+
+  /**
+   * Returns the epoch associated with current OM process.
+   */
+  long getOmEpoch();
 
   /**
    * Given a volume return the corresponding DB key.
@@ -334,7 +344,7 @@ public interface OMMetadataManager {
    */
   Table<String, S3SecretValue> getS3SecretTable();
 
-  Table<String, OMTransactionInfo> getTransactionInfoTable();
+  Table<String, TransactionInfo> getTransactionInfoTable();
 
   /**
    * Returns number of rows in a table.  This should not be used for very
@@ -382,4 +392,10 @@ public interface OMMetadataManager {
    * @return table names in OM DB.
    */
   Set<String> listTableNames();
+
+  Iterator<Map.Entry<CacheKey<String>, CacheValue<OmBucketInfo>>>
+      getBucketIterator();
+
+  TableIterator<String, ? extends Table.KeyValue<String, OmKeyInfo>>
+      getKeyIterator();
 }

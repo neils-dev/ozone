@@ -25,7 +25,7 @@ import org.apache.hadoop.hdds.protocol.DatanodeDetails;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.scm.container.ContainerException;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
-import org.apache.hadoop.hdds.scm.container.ContainerManager;
+import org.apache.hadoop.hdds.scm.container.ContainerManagerV2;
 import org.apache.hadoop.hdds.scm.container.ContainerNotFoundException;
 import org.apache.hadoop.hdds.scm.node.states.NodeNotFoundException;
 import org.apache.hadoop.hdds.scm.pipeline.PipelineManager;
@@ -45,14 +45,14 @@ public class DeadNodeHandler implements EventHandler<DatanodeDetails> {
 
   private final NodeManager nodeManager;
   private final PipelineManager pipelineManager;
-  private final ContainerManager containerManager;
+  private final ContainerManagerV2 containerManager;
 
   private static final Logger LOG =
       LoggerFactory.getLogger(DeadNodeHandler.class);
 
   public DeadNodeHandler(final NodeManager nodeManager,
                          final PipelineManager pipelineManager,
-                         final ContainerManager containerManager) {
+                         final ContainerManagerV2 containerManager) {
     this.nodeManager = nodeManager;
     this.pipelineManager = pipelineManager;
     this.containerManager = containerManager;
@@ -78,8 +78,11 @@ public class DeadNodeHandler implements EventHandler<DatanodeDetails> {
       destroyPipelines(datanodeDetails);
       closeContainers(datanodeDetails, publisher);
 
-      // Remove the container replicas associated with the dead node.
-      removeContainerReplicas(datanodeDetails);
+      // Remove the container replicas associated with the dead node unless it
+      // is IN_MAINTENANCE
+      if (!nodeManager.getNodeStatus(datanodeDetails).isInMaintenance()) {
+        removeContainerReplicas(datanodeDetails);
+      }
 
     } catch (NodeNotFoundException ex) {
       // This should not happen, we cannot get a dead node event for an
@@ -98,7 +101,7 @@ public class DeadNodeHandler implements EventHandler<DatanodeDetails> {
         .ifPresent(pipelines ->
             pipelines.forEach(id -> {
               try {
-                pipelineManager.finalizeAndDestroyPipeline(
+                pipelineManager.closePipeline(
                     pipelineManager.getPipeline(id), false);
               } catch (PipelineNotFoundException ignore) {
                 // Pipeline is not there in pipeline manager,

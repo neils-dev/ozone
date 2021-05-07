@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.hadoop.hdds.HddsConfigKeys;
+import org.apache.hadoop.hdds.client.RatisReplicationConfig;
 import org.apache.hadoop.hdds.conf.ConfigurationSource;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.scm.events.SCMEvents;
@@ -77,8 +78,8 @@ public class HealthyPipelineSafeModeRule extends SafeModeExitRule<Pipeline> {
 
     // We want to wait for RATIS THREE factor write pipelines
     int pipelineCount = pipelineManager.getPipelines(
-        HddsProtos.ReplicationType.RATIS, HddsProtos.ReplicationFactor.THREE,
-        Pipeline.PipelineState.ALLOCATED).size();
+        new RatisReplicationConfig(HddsProtos.ReplicationFactor.THREE),
+        Pipeline.PipelineState.OPEN).size();
 
     // This value will be zero when pipeline count is 0.
     // On a fresh installed cluster, there will be zero pipelines in the SCM
@@ -117,8 +118,8 @@ public class HealthyPipelineSafeModeRule extends SafeModeExitRule<Pipeline> {
     // create new pipelines.
     Preconditions.checkNotNull(pipeline);
     if (pipeline.getType() == HddsProtos.ReplicationType.RATIS &&
-        pipeline.getFactor() == HddsProtos.ReplicationFactor.THREE &&
-        pipeline.isHealthy() &&
+        ((RatisReplicationConfig) pipeline.getReplicationConfig())
+            .getReplicationFactor() == HddsProtos.ReplicationFactor.THREE &&
         !processedPipelineIDs.contains(pipeline.getId())) {
       getSafeModeMetrics().incCurrentHealthyPipelinesCount();
       currentHealthyPipelineCount++;
@@ -150,8 +151,9 @@ public class HealthyPipelineSafeModeRule extends SafeModeExitRule<Pipeline> {
 
   @Override
   public String getStatusText() {
-    return "currentHealthyPipelineCount " + this.currentHealthyPipelineCount
-        + " >= healthyPipelineThresholdCount "
-        + this.healthyPipelineThresholdCount;
+    return String.format("healthy Ratis/THREE pipelines (=%d) >= "
+            + "healthyPipelineThresholdCount (=%d)",
+        this.currentHealthyPipelineCount,
+        this.healthyPipelineThresholdCount);
   }
 }

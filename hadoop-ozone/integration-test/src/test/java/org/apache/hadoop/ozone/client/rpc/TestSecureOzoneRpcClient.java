@@ -31,6 +31,7 @@ import org.apache.hadoop.hdds.security.token.BlockTokenVerifier;
 import org.apache.hadoop.hdds.security.token.OzoneBlockTokenIdentifier;
 import org.apache.hadoop.hdds.security.x509.SecurityConfig;
 import org.apache.hadoop.ozone.MiniOzoneCluster;
+import org.apache.hadoop.ozone.OzoneConfigKeys;
 import org.apache.hadoop.ozone.client.CertificateClientTestImpl;
 import org.apache.hadoop.ozone.client.ObjectStore;
 import org.apache.hadoop.ozone.client.OzoneBucket;
@@ -62,20 +63,13 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.UUID;
 
-import org.junit.Rule;
-import org.junit.rules.Timeout;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.hadoop.hdds.HddsConfigKeys.OZONE_METADATA_DIRS;
 
 /**
  * This class is to test all the public facing APIs of Ozone Client.
  */
 public class TestSecureOzoneRpcClient extends TestOzoneRpcClient {
-
-  /**
-    * Set a timeout for each test.
-    */
-  @Rule
-  public Timeout timeout = new Timeout(300000);
 
   private static MiniOzoneCluster cluster = null;
   private static OzoneClient ozClient = null;
@@ -85,6 +79,7 @@ public class TestSecureOzoneRpcClient extends TestOzoneRpcClient {
       storageContainerLocationClient;
 
   private static final String SCM_ID = UUID.randomUUID().toString();
+  private static final String CLUSTER_ID = UUID.randomUUID().toString();
   private static File testDir;
   private static OzoneConfiguration conf;
   private static OzoneBlockTokenSecretManager secretManager;
@@ -106,11 +101,15 @@ public class TestSecureOzoneRpcClient extends TestOzoneRpcClient {
     conf.setInt(ScmConfigKeys.OZONE_SCM_PIPELINE_OWNER_CONTAINER_COUNT, 1);
     conf.setBoolean(HddsConfigKeys.HDDS_BLOCK_TOKEN_ENABLED, true);
     conf.set(OZONE_METADATA_DIRS, testDir.getAbsolutePath());
+    conf.setBoolean(OzoneConfigKeys.OZONE_ACL_ENABLED, true);
+    conf.set(OzoneConfigKeys.OZONE_ACL_AUTHORIZER_CLASS,
+        OzoneConfigKeys.OZONE_ACL_AUTHORIZER_CLASS_NATIVE);
     CertificateClientTestImpl certificateClientTest =
         new CertificateClientTestImpl(conf);
     cluster = MiniOzoneCluster.newBuilder(conf)
         .setNumDatanodes(10)
         .setScmId(SCM_ID)
+        .setClusterId(CLUSTER_ID)
         .setCertificateClient(certificateClientTest)
         .build();
     String user = UserGroupInformation.getCurrentUser().getShortUserName();
@@ -134,7 +133,7 @@ public class TestSecureOzoneRpcClient extends TestOzoneRpcClient {
     TestOzoneRpcClient.setStorageContainerLocationClient(
         storageContainerLocationClient);
     TestOzoneRpcClient.setStore(store);
-    TestOzoneRpcClient.setScmId(SCM_ID);
+    TestOzoneRpcClient.setClusterId(CLUSTER_ID);
   }
 
   /**
@@ -159,23 +158,23 @@ public class TestSecureOzoneRpcClient extends TestOzoneRpcClient {
       String keyName = UUID.randomUUID().toString();
 
       try (OzoneOutputStream out = bucket.createKey(keyName,
-          value.getBytes().length, ReplicationType.STAND_ALONE,
+          value.getBytes(UTF_8).length, ReplicationType.STAND_ALONE,
           ReplicationFactor.ONE, new HashMap<>())) {
-        out.write(value.getBytes());
+        out.write(value.getBytes(UTF_8));
       }
 
       OzoneKey key = bucket.getKey(keyName);
       Assert.assertEquals(keyName, key.getName());
       byte[] fileContent;
       try(OzoneInputStream is = bucket.readKey(keyName)) {
-        fileContent = new byte[value.getBytes().length];
+        fileContent = new byte[value.getBytes(UTF_8).length];
         is.read(fileContent);
       }
 
       Assert.assertTrue(verifyRatisReplication(volumeName, bucketName,
           keyName, ReplicationType.STAND_ALONE,
           ReplicationFactor.ONE));
-      Assert.assertEquals(value, new String(fileContent));
+      Assert.assertEquals(value, new String(fileContent, UTF_8));
       Assert.assertFalse(key.getCreationTime().isBefore(testStartTime));
       Assert.assertFalse(key.getModificationTime().isBefore(testStartTime));
     }
@@ -203,11 +202,11 @@ public class TestSecureOzoneRpcClient extends TestOzoneRpcClient {
       String keyName = UUID.randomUUID().toString();
 
       try (OzoneOutputStream out = bucket.createKey(keyName,
-          value.getBytes().length, ReplicationType.STAND_ALONE,
+          value.getBytes(UTF_8).length, ReplicationType.STAND_ALONE,
           ReplicationFactor.ONE, new HashMap<>())) {
         LambdaTestUtils.intercept(IOException.class, "UNAUTHENTICATED: Fail " +
                 "to find any token ",
-            () -> out.write(value.getBytes()));
+            () -> out.write(value.getBytes(UTF_8)));
       }
 
       OzoneKey key = bucket.getKey(keyName);
@@ -245,6 +244,11 @@ public class TestSecureOzoneRpcClient extends TestOzoneRpcClient {
     return true;
   }
 
+  @Test
+  @Override
+  // Restart DN doesn't work with security enabled.
+  public void testZReadKeyWithUnhealthyContainerReplia() throws Exception {
+  }
   /**
    * Close OzoneClient and shutdown MiniOzoneCluster.
    */

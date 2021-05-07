@@ -17,30 +17,30 @@
 
 package org.apache.hadoop.hdds.scm.container;
 
+import java.util.Optional;
+import java.util.UUID;
+
+import org.apache.hadoop.hdds.protocol.DatanodeDetails;
+import org.apache.hadoop.hdds.protocol.proto.StorageContainerDatanodeProtocolProtos.ContainerReplicaProto;
+
 import com.google.common.base.Preconditions;
 import org.apache.commons.lang3.builder.CompareToBuilder;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
-import org.apache.hadoop.hdds.protocol.DatanodeDetails;
-import org.apache.hadoop.hdds.protocol.proto
-    .StorageContainerDatanodeProtocolProtos.ContainerReplicaProto;
-
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * In-memory state of a container replica.
  */
 public final class ContainerReplica implements Comparable<ContainerReplica> {
 
-  final private ContainerID containerID;
-  final private ContainerReplicaProto.State state;
-  final private DatanodeDetails datanodeDetails;
-  final private UUID placeOfBirth;
+  private final ContainerID containerID;
+  private final ContainerReplicaProto.State state;
+  private final DatanodeDetails datanodeDetails;
+  private final UUID placeOfBirth;
 
   private Long sequenceId;
-  final private long keyCount;
-  final private long bytesUsed;
+  private final long keyCount;
+  private final long bytesUsed;
 
 
   private ContainerReplica(final ContainerID containerID,
@@ -160,6 +160,7 @@ public final class ContainerReplica implements Comparable<ContainerReplica> {
   public String toString() {
     return "ContainerReplica{" +
         "containerID=" + containerID +
+        ", state=" + state +
         ", datanodeDetails=" + datanodeDetails +
         ", placeOfBirth=" + placeOfBirth +
         ", sequenceId=" + sequenceId +

@@ -25,7 +25,7 @@ import org.apache.hadoop.hdds.utils.db.cache.CacheValue;
 import org.apache.hadoop.ozone.om.helpers.OmBucketInfo;
 import org.apache.hadoop.ozone.om.helpers.OmKeyInfo;
 import org.apache.hadoop.ozone.om.helpers.OmVolumeArgs;
-import org.apache.hadoop.ozone.om.ratis.OMTransactionInfo;
+import org.apache.hadoop.hdds.utils.TransactionInfo;
 import org.apache.hadoop.ozone.om.request.TestOMRequestUtils;
 import org.junit.Assert;
 import org.junit.Before;
@@ -68,22 +68,22 @@ public class TestOmMetadataManager {
   @Test
   public void testTransactionTable() throws Exception {
     omMetadataManager.getTransactionInfoTable().put(TRANSACTION_INFO_KEY,
-        new OMTransactionInfo.Builder().setCurrentTerm(1)
+        new TransactionInfo.Builder().setCurrentTerm(1)
             .setTransactionIndex(100).build());
 
     omMetadataManager.getTransactionInfoTable().put(TRANSACTION_INFO_KEY,
-        new OMTransactionInfo.Builder().setCurrentTerm(2)
+        new TransactionInfo.Builder().setCurrentTerm(2)
             .setTransactionIndex(200).build());
 
     omMetadataManager.getTransactionInfoTable().put(TRANSACTION_INFO_KEY,
-        new OMTransactionInfo.Builder().setCurrentTerm(3)
+        new TransactionInfo.Builder().setCurrentTerm(3)
             .setTransactionIndex(250).build());
 
-    OMTransactionInfo omTransactionInfo =
+    TransactionInfo transactionInfo =
         omMetadataManager.getTransactionInfoTable().get(TRANSACTION_INFO_KEY);
 
-    Assert.assertEquals(3, omTransactionInfo.getTerm());
-    Assert.assertEquals(250, omTransactionInfo.getTransactionIndex());
+    Assert.assertEquals(3, transactionInfo.getTerm());
+    Assert.assertEquals(250, transactionInfo.getTransactionIndex());
 
 
   }
@@ -324,19 +324,21 @@ public class TestOmMetadataManager {
     String volumeNameB = "volumeB";
     String ozoneBucket = "ozoneBucket";
     String hadoopBucket = "hadoopBucket";
-
+    String ozoneTestBucket = "ozoneBucket-Test";
 
     // Create volumes and buckets.
     TestOMRequestUtils.addVolumeToDB(volumeNameA, omMetadataManager);
     TestOMRequestUtils.addVolumeToDB(volumeNameB, omMetadataManager);
     addBucketsToCache(volumeNameA, ozoneBucket);
     addBucketsToCache(volumeNameB, hadoopBucket);
-
+    addBucketsToCache(volumeNameA, ozoneTestBucket);
 
     String prefixKeyA = "key-a";
     String prefixKeyB = "key-b";
+    String prefixKeyC = "key-c";
     TreeSet<String> keysASet = new TreeSet<>();
     TreeSet<String> keysBSet = new TreeSet<>();
+    TreeSet<String> keysCSet = new TreeSet<>();
     for (int i=1; i<= 100; i++) {
       if (i % 2 == 0) {
         keysASet.add(
@@ -348,7 +350,8 @@ public class TestOmMetadataManager {
         addKeysToOM(volumeNameA, hadoopBucket, prefixKeyB + i, i);
       }
     }
-
+    keysCSet.add(prefixKeyC + 1);
+    addKeysToOM(volumeNameA, ozoneTestBucket, prefixKeyC + 0, 0);
 
     TreeSet<String> keysAVolumeBSet = new TreeSet<>();
     TreeSet<String> keysBVolumeBSet = new TreeSet<>();
@@ -442,6 +445,14 @@ public class TestOmMetadataManager {
 
     Assert.assertEquals(omKeyInfoList.size(), 0);
 
+    // List all keys with empty prefix
+    omKeyInfoList = omMetadataManager.listKeys(volumeNameA, ozoneBucket,
+        null, null, 100);
+    Assert.assertEquals(50, omKeyInfoList.size());
+    for (OmKeyInfo omKeyInfo : omKeyInfoList) {
+      Assert.assertTrue(omKeyInfo.getKeyName().startsWith(
+          prefixKeyA));
+    }
   }
 
   @Test

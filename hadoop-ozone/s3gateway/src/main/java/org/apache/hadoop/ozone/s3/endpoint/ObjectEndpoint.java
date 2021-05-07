@@ -41,6 +41,7 @@ import javax.ws.rs.core.StreamingOutput;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.ParseException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -54,6 +55,7 @@ import org.apache.hadoop.hdds.client.ReplicationFactor;
 import org.apache.hadoop.hdds.client.ReplicationType;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.hdds.conf.StorageUnit;
+import org.apache.hadoop.ozone.OzoneConsts;
 import org.apache.hadoop.ozone.client.OzoneBucket;
 import org.apache.hadoop.ozone.client.OzoneKeyDetails;
 import org.apache.hadoop.ozone.client.OzoneMultipartUploadPartListParts;
@@ -89,10 +91,13 @@ import static org.apache.hadoop.ozone.s3.S3GatewayConfigKeys.OZONE_S3G_CLIENT_BU
 import static org.apache.hadoop.ozone.s3.exception.S3ErrorTable.ENTITY_TOO_SMALL;
 import static org.apache.hadoop.ozone.s3.exception.S3ErrorTable.INVALID_REQUEST;
 import static org.apache.hadoop.ozone.s3.exception.S3ErrorTable.NO_SUCH_UPLOAD;
+import static org.apache.hadoop.ozone.s3.exception.S3ErrorTable.PRECOND_FAILED;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.ACCEPT_RANGE_HEADER;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.CONTENT_RANGE_HEADER;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.COPY_SOURCE_HEADER;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.COPY_SOURCE_HEADER_RANGE;
+import static org.apache.hadoop.ozone.s3.util.S3Consts.COPY_SOURCE_IF_MODIFIED_SINCE;
+import static org.apache.hadoop.ozone.s3.util.S3Consts.COPY_SOURCE_IF_UNMODIFIED_SINCE;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.RANGE_HEADER;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.RANGE_HEADER_SUPPORTED_UNIT;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.STORAGE_CLASS_HEADER;
@@ -209,6 +214,9 @@ public class ObjectEndpoint extends EndpointBase {
               " considered as Unix Paths. Path has Violated FS Semantics " +
               "which caused put operation to fail.");
           throw os3Exception;
+        } else if ((((OMException) ex).getResult() ==
+            ResultCodes.PERMISSION_DENIED)) {
+          throw S3ErrorTable.newError(S3ErrorTable.ACCESS_DENIED, keyPath);
         }
       }
       throw ex;
@@ -320,6 +328,8 @@ public class ObjectEndpoint extends EndpointBase {
       if (ex.getResult() == ResultCodes.KEY_NOT_FOUND) {
         throw S3ErrorTable.newError(S3ErrorTable
             .NO_SUCH_KEY, keyPath);
+      } else if (ex.getResult() == ResultCodes.PERMISSION_DENIED) {
+        throw S3ErrorTable.newError(S3ErrorTable.ACCESS_DENIED, keyPath);
       } else {
         throw ex;
       }
@@ -330,7 +340,7 @@ public class ObjectEndpoint extends EndpointBase {
       ResponseBuilder responseBuilder, OzoneKeyDetails key) {
 
     ZonedDateTime lastModificationTime = key.getModificationTime()
-        .atZone(ZoneId.of("GMT"));
+        .atZone(ZoneId.of(OzoneConsts.OZONE_TIME_ZONE));
 
     responseBuilder
         .header(LAST_MODIFIED,
@@ -357,6 +367,8 @@ public class ObjectEndpoint extends EndpointBase {
       if (ex.getResult() == ResultCodes.KEY_NOT_FOUND) {
         // Just return 404 with no content
         return Response.status(Status.NOT_FOUND).build();
+      } else if (ex.getResult() == ResultCodes.PERMISSION_DENIED) {
+        throw S3ErrorTable.newError(S3ErrorTable.ACCESS_DENIED, keyPath);
       } else {
         throw ex;
       }
@@ -426,6 +438,8 @@ public class ObjectEndpoint extends EndpointBase {
       } else if (ex.getResult() == ResultCodes.KEY_NOT_FOUND) {
         //NOT_FOUND is not a problem, AWS doesn't throw exception for missing
         // keys. Just return 204
+      } else if (ex.getResult() == ResultCodes.PERMISSION_DENIED) {
+        throw S3ErrorTable.newError(S3ErrorTable.ACCESS_DENIED, keyPath);
       } else {
         throw ex;
       }
@@ -474,9 +488,12 @@ public class ObjectEndpoint extends EndpointBase {
 
       return Response.status(Status.OK).entity(
           multipartUploadInitiateResponse).build();
-    } catch (IOException ex) {
+    } catch (OMException ex) {
       LOG.error("Error in Initiate Multipart Upload Request for bucket: {}, " +
           "key: {}", bucket, key, ex);
+      if (ex.getResult() == ResultCodes.PERMISSION_DENIED) {
+        throw S3ErrorTable.newError(S3ErrorTable.ACCESS_DENIED, key);
+      }
       throw ex;
     }
   }
@@ -572,6 +589,18 @@ public class ObjectEndpoint extends EndpointBase {
           String sourceBucket = result.getLeft();
           String sourceKey = result.getRight();
 
+          Long sourceKeyModificationTime = getBucket(sourceBucket).
+              getKey(sourceKey).getModificationTime().toEpochMilli();
+          String copySourceIfModifiedSince =
+              headers.getHeaderString(COPY_SOURCE_IF_MODIFIED_SINCE);
+          String copySourceIfUnmodifiedSince =
+              headers.getHeaderString(COPY_SOURCE_IF_UNMODIFIED_SINCE);
+          if (!checkCopySourceModificationTime(sourceKeyModificationTime,
+              copySourceIfModifiedSince, copySourceIfUnmodifiedSince)) {
+            throw S3ErrorTable.newError(PRECOND_FAILED,
+                sourceBucket + "/" + sourceKey);
+          }
+
           try (OzoneInputStream sourceObject =
                    getBucket(sourceBucket).readKey(sourceKey)) {
 
@@ -619,6 +648,9 @@ public class ObjectEndpoint extends EndpointBase {
       if (ex.getResult() == ResultCodes.NO_SUCH_MULTIPART_UPLOAD_ERROR) {
         throw S3ErrorTable.newError(NO_SUCH_UPLOAD,
             uploadID);
+      } else if (ex.getResult() == ResultCodes.PERMISSION_DENIED) {
+        throw S3ErrorTable.newError(S3ErrorTable.ACCESS_DENIED,
+            bucket + "/" + key);
       }
       throw ex;
     }
@@ -675,6 +707,9 @@ public class ObjectEndpoint extends EndpointBase {
       if (ex.getResult() == ResultCodes.NO_SUCH_MULTIPART_UPLOAD_ERROR) {
         throw S3ErrorTable.newError(NO_SUCH_UPLOAD,
             uploadID);
+      } else if (ex.getResult() == ResultCodes.PERMISSION_DENIED) {
+        throw S3ErrorTable.newError(S3ErrorTable.ACCESS_DENIED,
+            bucket + "/" + key + "/" + uploadID);
       }
       throw ex;
     }
@@ -760,6 +795,9 @@ public class ObjectEndpoint extends EndpointBase {
         throw S3ErrorTable.newError(S3ErrorTable.NO_SUCH_KEY, sourceKey);
       } else if (ex.getResult() == ResultCodes.BUCKET_NOT_FOUND) {
         throw S3ErrorTable.newError(S3ErrorTable.NO_SUCH_BUCKET, sourceBucket);
+      } else if (ex.getResult() == ResultCodes.PERMISSION_DENIED) {
+        throw S3ErrorTable.newError(S3ErrorTable.ACCESS_DENIED,
+            destBucket + "/" + destkey);
       }
       throw ex;
     } finally {
@@ -812,5 +850,36 @@ public class ObjectEndpoint extends EndpointBase {
       partMarker = Integer.parseInt(partNumberMarker);
     }
     return partMarker;
+  }
+
+  private static long parseOzoneDate(String ozoneDateStr) throws OS3Exception {
+    long ozoneDateInMs;
+    try {
+      ozoneDateInMs = OzoneUtils.formatDate(ozoneDateStr);
+    } catch (ParseException e) {
+      throw S3ErrorTable.newError(S3ErrorTable
+          .INVALID_ARGUMENT, ozoneDateStr);
+    }
+    return ozoneDateInMs;
+  }
+
+  private boolean checkCopySourceModificationTime(Long lastModificationTime,
+      String copySourceIfModifiedSinceStr,
+      String copySourceIfUnmodifiedSinceStr) throws OS3Exception {
+    long copySourceIfModifiedSince = Long.MIN_VALUE;
+    long copySourceIfUnmodifiedSince = Long.MAX_VALUE;
+
+    if (copySourceIfModifiedSinceStr != null) {
+      copySourceIfModifiedSince =
+          parseOzoneDate(copySourceIfModifiedSinceStr);
+    }
+
+    if (copySourceIfUnmodifiedSinceStr != null) {
+      copySourceIfUnmodifiedSince =
+          parseOzoneDate(copySourceIfUnmodifiedSinceStr);
+    }
+
+    return (copySourceIfModifiedSince <= lastModificationTime) &&
+        (lastModificationTime <= copySourceIfUnmodifiedSince);
   }
 }

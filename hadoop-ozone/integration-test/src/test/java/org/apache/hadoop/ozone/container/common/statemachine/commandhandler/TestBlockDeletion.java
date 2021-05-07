@@ -28,6 +28,7 @@ import org.apache.hadoop.hdds.protocol.proto
     .StorageContainerDatanodeProtocolProtos.ContainerReplicaProto;
 import org.apache.hadoop.hdds.protocol.proto
     .StorageContainerDatanodeProtocolProtos.ContainerReportsProto;
+import org.apache.hadoop.hdds.scm.ScmConfig;
 import org.apache.hadoop.hdds.scm.ScmConfigKeys;
 import org.apache.hadoop.hdds.scm.block.DeletedBlockLogImpl;
 import org.apache.hadoop.hdds.scm.block.SCMBlockDeletingService;
@@ -47,6 +48,7 @@ import org.apache.hadoop.ozone.container.common.helpers.BlockData;
 import org.apache.hadoop.ozone.container.common.helpers.ChunkInfoList;
 import org.apache.hadoop.ozone.container.common.impl.ContainerData;
 import org.apache.hadoop.ozone.container.common.impl.ContainerSet;
+import org.apache.hadoop.ozone.container.common.statemachine.DatanodeConfiguration;
 import org.apache.hadoop.ozone.container.keyvalue.KeyValueContainerData;
 import org.apache.hadoop.ozone.container.keyvalue.helpers.BlockUtils;
 import org.apache.hadoop.ozone.om.OzoneManager;
@@ -66,6 +68,7 @@ import org.slf4j.event.Level;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.List;
@@ -77,6 +80,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static java.lang.Math.max;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_COMMAND_STATUS_REPORT_INTERVAL;
 import static org.apache.hadoop.hdds
     .HddsConfigKeys.HDDS_CONTAINER_REPORT_INTERVAL;
@@ -113,6 +117,13 @@ public class TestBlockDeletion {
 
     conf.setTimeDuration(OZONE_BLOCK_DELETING_SERVICE_INTERVAL, 100,
         TimeUnit.MILLISECONDS);
+    DatanodeConfiguration datanodeConfiguration = conf.getObject(
+            DatanodeConfiguration.class);
+    datanodeConfiguration.setBlockDeletionInterval(Duration.ofMillis(100));
+    conf.setFromObject(datanodeConfiguration);
+    ScmConfig scmConfig = conf.getObject(ScmConfig.class);
+    scmConfig.setBlockDeletionInterval(Duration.ofMillis(100));
+    conf.setFromObject(scmConfig);
     conf.setTimeDuration(HDDS_CONTAINER_REPORT_INTERVAL, 200,
         TimeUnit.MILLISECONDS);
     conf.setTimeDuration(HDDS_COMMAND_STATUS_REPORT_INTERVAL, 200,
@@ -159,10 +170,11 @@ public class TestBlockDeletion {
 
     String keyName = UUID.randomUUID().toString();
 
-    OzoneOutputStream out = bucket.createKey(keyName, value.getBytes().length,
-        ReplicationType.RATIS, ReplicationFactor.THREE, new HashMap<>());
+    OzoneOutputStream out = bucket.createKey(keyName,
+        value.getBytes(UTF_8).length, ReplicationType.RATIS,
+        ReplicationFactor.THREE, new HashMap<>());
     for (int i = 0; i < 100; i++) {
-      out.write(value.getBytes());
+      out.write(value.getBytes(UTF_8));
     }
     out.close();
 
@@ -242,9 +254,10 @@ public class TestBlockDeletion {
     OzoneBucket bucket = volume.getBucket(bucketName);
 
     String keyName = UUID.randomUUID().toString();
-    OzoneOutputStream out = bucket.createKey(keyName, value.getBytes().length,
-        ReplicationType.RATIS, ReplicationFactor.THREE, new HashMap<>());
-    out.write(value.getBytes());
+    OzoneOutputStream out = bucket.createKey(keyName,
+        value.getBytes(UTF_8).length, ReplicationType.RATIS,
+        ReplicationFactor.THREE, new HashMap<>());
+    out.write(value.getBytes(UTF_8));
     out.close();
 
     OmKeyArgs keyArgs = new OmKeyArgs.Builder().setVolumeName(volumeName)
@@ -258,7 +271,7 @@ public class TestBlockDeletion {
     Thread.sleep(5000);
     List<ContainerInfo> containerInfos =
         scm.getContainerManager().getContainers();
-    final int valueSize = value.getBytes().length;
+    final int valueSize = value.getBytes(UTF_8).length;
     final int keyCount = 1;
     containerInfos.stream().forEach(container -> {
       Assert.assertEquals(valueSize, container.getUsedBytes());
@@ -350,8 +363,7 @@ public class TestBlockDeletion {
   }
 
   private void verifyTransactionsCommitted() throws IOException {
-    DeletedBlockLogImpl deletedBlockLog =
-        (DeletedBlockLogImpl) scm.getScmBlockManager().getDeletedBlockLog();
+    scm.getScmBlockManager().getDeletedBlockLog();
     for (long txnID = 1; txnID <= maxTransactionId; txnID++) {
       Assert.assertNull(
           scm.getScmMetadataStore().getDeletedBlocksTXTable().get(txnID));

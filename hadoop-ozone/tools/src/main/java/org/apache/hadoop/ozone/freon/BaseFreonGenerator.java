@@ -18,7 +18,6 @@ package org.apache.hadoop.ozone.freon;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetSocketAddress;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -30,16 +29,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
-import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.scm.pipeline.Pipeline;
 import org.apache.hadoop.hdds.scm.protocol.StorageContainerLocationProtocol;
-import org.apache.hadoop.hdds.scm.protocolPB.StorageContainerLocationProtocolClientSideTranslatorPB;
-import org.apache.hadoop.hdds.scm.protocolPB.StorageContainerLocationProtocolPB;
-import org.apache.hadoop.hdds.tracing.TracingUtil;
-import org.apache.hadoop.ipc.Client;
+import org.apache.hadoop.hdds.utils.HAUtils;
 import org.apache.hadoop.ipc.ProtobufRpcEngine;
 import org.apache.hadoop.ipc.RPC;
-import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.ozone.client.OzoneClient;
 import org.apache.hadoop.ozone.client.OzoneClientFactory;
 import org.apache.hadoop.ozone.client.OzoneVolume;
@@ -60,7 +54,6 @@ import io.opentracing.Span;
 import io.opentracing.util.GlobalTracer;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.RandomStringUtils;
-import static org.apache.hadoop.hdds.HddsUtils.getScmAddressForClients;
 import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_SERVICE_IDS_KEY;
 import org.apache.ratis.protocol.ClientId;
 import org.slf4j.Logger;
@@ -162,11 +155,20 @@ public class BaseFreonGenerator {
 
       //in case of an other failed test, we shouldn't execute more tasks.
       if (counter >= testNo || (!failAtEnd && failureCounter.get() > 0)) {
-        return;
+        break;
       }
 
       tryNextTask(provider, counter);
     }
+
+    taskLoopCompleted();
+  }
+
+  /**
+   * Provides a way to clean up per-thread resources.
+   */
+  protected void taskLoopCompleted() {
+    // no-op
   }
 
   /**
@@ -337,26 +339,8 @@ public class BaseFreonGenerator {
   }
 
   public StorageContainerLocationProtocol createStorageContainerLocationClient(
-      OzoneConfiguration ozoneConf)
-      throws IOException {
-
-    long version = RPC.getProtocolVersion(
-        StorageContainerLocationProtocolPB.class);
-    InetSocketAddress scmAddress =
-        getScmAddressForClients(ozoneConf);
-
-    RPC.setProtocolEngine(ozoneConf, StorageContainerLocationProtocolPB.class,
-        ProtobufRpcEngine.class);
-    StorageContainerLocationProtocol client =
-        TracingUtil.createProxy(
-            new StorageContainerLocationProtocolClientSideTranslatorPB(
-                RPC.getProxy(StorageContainerLocationProtocolPB.class, version,
-                    scmAddress, UserGroupInformation.getCurrentUser(),
-                    ozoneConf,
-                    NetUtils.getDefaultSocketFactory(ozoneConf),
-                    Client.getRpcTimeout(ozoneConf))),
-            StorageContainerLocationProtocol.class, ozoneConf);
-    return client;
+      OzoneConfiguration ozoneConf) throws IOException {
+    return HAUtils.getScmContainerClient(ozoneConf);
   }
 
   public static Pipeline findPipelineForTest(String pipelineId,
@@ -372,7 +356,7 @@ public class BaseFreonGenerator {
                   + pipelineId));
     } else {
       pipeline = pipelines.stream()
-          .filter(p -> p.getFactor() == HddsProtos.ReplicationFactor.THREE)
+          .filter(p -> p.getReplicationConfig().getRequiredNodes() == 3)
           .findFirst()
           .orElseThrow(() -> new IllegalArgumentException(
               "Pipeline ID is NOT defined, and no pipeline " +
@@ -474,6 +458,10 @@ public class BaseFreonGenerator {
     return threadNo;
   }
 
+  public void setThreadNo(int threadNo) {
+    this.threadNo = threadNo;
+  }
+
   protected OzoneClient createOzoneClient(String omServiceID,
       OzoneConfiguration conf) throws Exception {
     if (omServiceID != null) {
@@ -481,5 +469,13 @@ public class BaseFreonGenerator {
     } else {
       return OzoneClientFactory.getRpcClient(conf);
     }
+  }
+
+  public void setTestNo(long testNo) {
+    this.testNo = testNo;
+  }
+
+  public long getTestNo() {
+    return testNo;
   }
 }

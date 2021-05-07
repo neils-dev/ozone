@@ -54,6 +54,7 @@ import org.apache.hadoop.hdds.scm.container.common.helpers.StorageContainerExcep
 import org.apache.hadoop.hdds.utils.Cache;
 import org.apache.hadoop.hdds.utils.ResourceLimitCache;
 import org.apache.hadoop.ozone.OzoneConfigKeys;
+import org.apache.hadoop.ozone.common.utils.BufferUtils;
 import org.apache.hadoop.ozone.container.common.interfaces.ContainerDispatcher;
 import org.apache.hadoop.ozone.container.ozoneimpl.ContainerController;
 import org.apache.hadoop.util.Time;
@@ -71,7 +72,6 @@ import org.apache.ratis.protocol.RaftGroupMemberId;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.protocol.exceptions.StateMachineException;
 import org.apache.ratis.server.RaftServer;
-import org.apache.ratis.server.impl.RaftServerProxy;
 import org.apache.ratis.server.protocol.TermIndex;
 import org.apache.ratis.server.raftlog.RaftLog;
 import org.apache.ratis.server.storage.RaftStorage;
@@ -220,8 +220,7 @@ public class ContainerStateMachine extends BaseStateMachine {
   private long loadSnapshot(SingleFileSnapshotInfo snapshot)
       throws IOException {
     if (snapshot == null) {
-      TermIndex empty =
-          TermIndex.newTermIndex(0, RaftLog.INVALID_LOG_INDEX);
+      TermIndex empty = TermIndex.valueOf(0, RaftLog.INVALID_LOG_INDEX);
       LOG.info("{}: The snapshot info is null. Setting the last applied index" +
               "to:{}", gid, empty);
       setLastAppliedTermIndex(empty);
@@ -301,8 +300,8 @@ public class ContainerStateMachine extends BaseStateMachine {
             snapshotFile);
         throw ioe;
       }
-      LOG.info("{}: Finished taking a snapshot at:{} file:{} time:{}", gid, ti,
-          snapshotFile, (Time.monotonicNow() - startTime));
+      LOG.info("{}: Finished taking a snapshot at:{} file:{} took: {} ms",
+          gid, ti, snapshotFile, (Time.monotonicNow() - startTime));
       return ti.getIndex();
     }
     return -1;
@@ -420,10 +419,9 @@ public class ContainerStateMachine extends BaseStateMachine {
       ContainerCommandRequestProto requestProto, long entryIndex, long term,
       long startTime) {
     final WriteChunkRequestProto write = requestProto.getWriteChunk();
-    RaftServer server = ratisServer.getServer();
-    Preconditions.checkState(server instanceof RaftServerProxy);
     try {
-      if (((RaftServerProxy) server).getImpl(gid).isLeader()) {
+      RaftServer.Division division = ratisServer.getServerDivision();
+      if (division.getInfo().isLeader()) {
         stateMachineDataCache.put(entryIndex, write.getData());
       }
     } catch (InterruptedException ioe) {
@@ -448,7 +446,7 @@ public class ContainerStateMachine extends BaseStateMachine {
             return runCommand(requestProto, context);
           } catch (Exception e) {
             LOG.error("{}: writeChunk writeStateMachineData failed: blockId" +
-                "{} logIndex {} chunkName {} {}", gid, write.getBlockID(),
+                "{} logIndex {} chunkName {}", gid, write.getBlockID(),
                 entryIndex, write.getChunkData().getChunkName(), e);
             metrics.incNumWriteDataFails();
             // write chunks go in parallel. It's possible that one write chunk
@@ -461,8 +459,8 @@ public class ContainerStateMachine extends BaseStateMachine {
 
     writeChunkFutureMap.put(entryIndex, writeChunkFuture);
     if (LOG.isDebugEnabled()) {
-      LOG.error("{}: writeChunk writeStateMachineData : blockId" +
-              "{} logIndex {} chunkName {} {}", gid, write.getBlockID(),
+      LOG.debug("{}: writeChunk writeStateMachineData : blockId" +
+              "{} logIndex {} chunkName {}", gid, write.getBlockID(),
           entryIndex, write.getChunkData().getChunkName());
     }
     // Remove the future once it finishes execution from the
@@ -575,7 +573,8 @@ public class ContainerStateMachine extends BaseStateMachine {
     ReadChunkRequestProto.Builder readChunkRequestProto =
         ReadChunkRequestProto.newBuilder()
             .setBlockID(writeChunkRequestProto.getBlockID())
-            .setChunkData(chunkInfo);
+            .setChunkData(chunkInfo)
+            .setReadChunkVersion(ContainerProtos.ReadChunkVersion.V1);
     ContainerCommandRequestProto dataContainerCommandProto =
         ContainerCommandRequestProto.newBuilder(requestProto)
             .setCmdType(Type.ReadChunk).setReadChunk(readChunkRequestProto)
@@ -598,14 +597,22 @@ public class ContainerStateMachine extends BaseStateMachine {
     }
 
     ReadChunkResponseProto responseProto = response.getReadChunk();
+    ByteString data;
+    if (responseProto.hasData()) {
+      data = responseProto.getData();
+    } else {
+      data = BufferUtils.concatByteStrings(
+          responseProto.getDataBuffers().getBuffersList());
+    }
 
-    ByteString data = responseProto.getData();
     // assert that the response has data in it.
     Preconditions
-        .checkNotNull(data, "read chunk data is null for chunk: %s", chunkInfo);
+        .checkNotNull(data, "read chunk data is null for chunk: %s",
+            chunkInfo);
     Preconditions.checkState(data.size() == chunkInfo.getLen(),
         "read chunk len=%s does not match chunk expected len=%s for chunk:%s",
         data.size(), chunkInfo.getLen(), chunkInfo);
+
     return data;
   }
 
@@ -700,7 +707,7 @@ public class ContainerStateMachine extends BaseStateMachine {
    * @param index index of the log entry
    */
   @Override
-  public void notifyIndexUpdate(long term, long index) {
+  public void notifyTermIndexUpdated(long term, long index) {
     applyTransactionCompletionMap.put(index, term);
     // We need to call updateLastApplied here because now in ratis when a
     // node becomes leader, it is checking stateMachineIndex >=
@@ -763,10 +770,11 @@ public class ContainerStateMachine extends BaseStateMachine {
             }
           }, getCommandExecutor(requestProto));
       future.thenApply(r -> {
-        if (trx.getServerRole() == RaftPeerRole.LEADER) {
+        if (trx.getServerRole() == RaftPeerRole.LEADER
+            && trx.getStateMachineContext() != null) {
           long startTime = (long) trx.getStateMachineContext();
           metrics.incPipelineLatency(cmdType,
-              Time.monotonicNowNanos() - startTime);
+              (Time.monotonicNowNanos() - startTime) / 1000000L);
         }
         // ignore close container exception while marking the stateMachine
         // unhealthy
@@ -811,6 +819,12 @@ public class ContainerStateMachine extends BaseStateMachine {
         }
         return applyTransactionFuture;
       }).whenComplete((r, t) ->  {
+        if (t != null) {
+          stateMachineHealthy.set(false);
+          LOG.error("gid {} : ApplyTransaction failed. cmd {} logIndex "
+                  + "{} exception {}", gid, requestProto.getCmdType(),
+              index, t);
+        }
         applyTransactionSemaphore.release();
         metrics.recordApplyTransactionCompletion(
             Time.monotonicNowNanos() - applyTxnStartTime);
@@ -844,7 +858,7 @@ public class ContainerStateMachine extends BaseStateMachine {
   }
 
   @Override
-  public void notifySlowness(RoleInfoProto roleInfoProto) {
+  public void notifyFollowerSlowness(RoleInfoProto roleInfoProto) {
     ratisServer.handleNodeSlowness(gid, roleInfoProto);
   }
 

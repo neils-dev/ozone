@@ -17,6 +17,7 @@
 package org.apache.hadoop.ozone.om.ratis;
 
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
+import org.apache.hadoop.ozone.common.ha.ratis.RatisSnapshotInfo;
 import org.apache.hadoop.ozone.om.OMConfigKeys;
 import org.apache.hadoop.ozone.om.OMMetadataManager;
 import org.apache.hadoop.ozone.om.OmMetadataManagerImpl;
@@ -58,10 +59,10 @@ public class TestOzoneManagerStateMachine {
 
     when(ozoneManagerRatisServer.getOzoneManager()).thenReturn(ozoneManager);
     when(ozoneManager.getSnapshotInfo()).thenReturn(
-        Mockito.mock(OMRatisSnapshotInfo.class));
+        Mockito.mock(RatisSnapshotInfo.class));
     ozoneManagerStateMachine =
         new OzoneManagerStateMachine(ozoneManagerRatisServer, false);
-    ozoneManagerStateMachine.notifyIndexUpdate(0, 0);
+    ozoneManagerStateMachine.notifyTermIndexUpdated(0, 0);
   }
 
   @Test
@@ -70,7 +71,7 @@ public class TestOzoneManagerStateMachine {
     // Happy scenario.
 
     // Conf/metadata transaction.
-    ozoneManagerStateMachine.notifyIndexUpdate(0, 1);
+    ozoneManagerStateMachine.notifyTermIndexUpdated(0, 1);
     Assert.assertEquals(0,
         ozoneManagerStateMachine.getLastAppliedTermIndex().getTerm());
     Assert.assertEquals(1,
@@ -94,7 +95,7 @@ public class TestOzoneManagerStateMachine {
         ozoneManagerStateMachine.getLastAppliedTermIndex().getIndex());
 
     // Conf/metadata transaction.
-    ozoneManagerStateMachine.notifyIndexUpdate(0L, 4L);
+    ozoneManagerStateMachine.notifyTermIndexUpdated(0L, 4L);
 
     Assert.assertEquals(0L,
         ozoneManagerStateMachine.getLastAppliedTermIndex().getTerm());
@@ -128,7 +129,7 @@ public class TestOzoneManagerStateMachine {
     // lastAppliedIndex as 4 or not.
 
     // Conf/metadata transaction.
-    ozoneManagerStateMachine.notifyIndexUpdate(0, 1);
+    ozoneManagerStateMachine.notifyTermIndexUpdated(0, 1);
     Assert.assertEquals(0,
         ozoneManagerStateMachine.getLastAppliedTermIndex().getTerm());
     Assert.assertEquals(1,
@@ -143,7 +144,7 @@ public class TestOzoneManagerStateMachine {
 
 
     // Conf/metadata transaction.
-    ozoneManagerStateMachine.notifyIndexUpdate(0L, 5L);
+    ozoneManagerStateMachine.notifyTermIndexUpdated(0L, 5L);
 
   // Still it should be zero, as for 2,3,4 updateLastAppliedIndex is not yet
     // called so the lastAppliedIndex will be at older value.

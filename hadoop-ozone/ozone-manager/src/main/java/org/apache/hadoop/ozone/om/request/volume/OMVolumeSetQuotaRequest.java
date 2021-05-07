@@ -71,12 +71,12 @@ public class OMVolumeSetQuotaRequest extends OMVolumeRequest {
   public OMRequest preExecute(OzoneManager ozoneManager) throws IOException {
 
     long modificationTime = Time.now();
-    SetVolumePropertyRequest modifiedRequest = getOmRequest()
+    SetVolumePropertyRequest.Builder setPropertyRequestBuilde = getOmRequest()
         .getSetVolumePropertyRequest().toBuilder()
-        .setModificationTime(modificationTime).build();
+        .setModificationTime(modificationTime);
 
     return getOmRequest().toBuilder()
-        .setSetVolumePropertyRequest(modifiedRequest.toBuilder())
+        .setSetVolumePropertyRequest(setPropertyRequestBuilde)
         .setUserInfo(getUserInfo())
         .build();
   }
@@ -135,11 +135,12 @@ public class OMVolumeSetQuotaRequest extends OMVolumeRequest {
       } else {
         omVolumeArgs.setQuotaInBytes(omVolumeArgs.getQuotaInBytes());
       }
-      if (checkQuotaCountsValid(setVolumePropertyRequest.getQuotaInCounts())) {
-        omVolumeArgs.setQuotaInCounts(
-            setVolumePropertyRequest.getQuotaInCounts());
+      if (checkQuotaNamespaceValid(
+          setVolumePropertyRequest.getQuotaInNamespace())) {
+        omVolumeArgs.setQuotaInNamespace(
+            setVolumePropertyRequest.getQuotaInNamespace());
       } else {
-        omVolumeArgs.setQuotaInCounts(omVolumeArgs.getQuotaInCounts());
+        omVolumeArgs.setQuotaInNamespace(omVolumeArgs.getQuotaInNamespace());
       }
 
       omVolumeArgs.setUpdateID(transactionLogIndex,
@@ -188,7 +189,8 @@ public class OMVolumeSetQuotaRequest extends OMVolumeRequest {
       long volumeQuotaInBytes, String volumeName) throws IOException {
     long totalBucketQuota = 0;
 
-    if (volumeQuotaInBytes == 0) {
+    if (volumeQuotaInBytes < OzoneConsts.QUOTA_RESET
+        || volumeQuotaInBytes == 0) {
       return false;
     }
 
@@ -210,9 +212,9 @@ public class OMVolumeSetQuotaRequest extends OMVolumeRequest {
     return true;
   }
 
-  public boolean checkQuotaCountsValid(long quotaInCounts) {
+  public boolean checkQuotaNamespaceValid(long quotaInNamespace) {
 
-    if ((quotaInCounts <= 0 && quotaInCounts != OzoneConsts.QUOTA_RESET)) {
+    if (quotaInNamespace < OzoneConsts.QUOTA_RESET || quotaInNamespace == 0) {
       return false;
     }
     return true;

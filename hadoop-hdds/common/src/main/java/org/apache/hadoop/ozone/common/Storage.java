@@ -130,7 +130,7 @@ public abstract class Storage {
     return storageInfo;
   }
 
-  abstract protected Properties getNodeProperties();
+  protected abstract Properties getNodeProperties();
 
   /**
    * Sets the Node properties specific to OM/SCM.
@@ -248,6 +248,18 @@ public abstract class Storage {
       throw new IOException("Cannot create directory " + getCurrentDir());
     }
     storageInfo.writeTo(getVersionFile());
+  }
+
+  /**
+   * Creates the Version file even if it exists.
+   * @throws IOException
+   */
+  public void forceInitialize() throws IOException {
+    if (state != StorageState.INITIALIZED) {
+      initialize();
+    } else {
+      storageInfo.writeTo(getVersionFile());
+    }
   }
 
   /**

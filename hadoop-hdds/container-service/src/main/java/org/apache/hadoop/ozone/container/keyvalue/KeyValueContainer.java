@@ -97,11 +97,11 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
 
   @Override
   public void create(VolumeSet volumeSet, VolumeChoosingPolicy
-      volumeChoosingPolicy, String scmId) throws StorageContainerException {
+      volumeChoosingPolicy, String clusterId) throws StorageContainerException {
     Preconditions.checkNotNull(volumeChoosingPolicy, "VolumeChoosingPolicy " +
         "cannot be null");
     Preconditions.checkNotNull(volumeSet, "VolumeSet cannot be null");
-    Preconditions.checkNotNull(scmId, "scmId cannot be null");
+    Preconditions.checkNotNull(clusterId, "clusterId cannot be null");
 
     File containerMetaDataPath = null;
     //acquiring volumeset read lock
@@ -115,11 +115,11 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
       long containerID = containerData.getContainerID();
 
       containerMetaDataPath = KeyValueContainerLocationUtil
-          .getContainerMetaDataPath(hddsVolumeDir, scmId, containerID);
+          .getContainerMetaDataPath(hddsVolumeDir, clusterId, containerID);
       containerData.setMetadataPath(containerMetaDataPath.getPath());
 
       File chunksPath = KeyValueContainerLocationUtil.getChunksLocationPath(
-          hddsVolumeDir, scmId, containerID);
+          hddsVolumeDir, clusterId, containerID);
 
       // Check if it is new Container.
       ContainerUtils.verifyIsNewContainer(containerMetaDataPath);
@@ -173,20 +173,20 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
    * Set all of the path realted container data fields based on the name
    * conventions.
    *
-   * @param scmId
+   * @param clusterId
    * @param containerVolume
    * @param hddsVolumeDir
    */
-  public void populatePathFields(String scmId,
+  public void populatePathFields(String clusterId,
       HddsVolume containerVolume, String hddsVolumeDir) {
 
     long containerId = containerData.getContainerID();
 
     File containerMetaDataPath = KeyValueContainerLocationUtil
-        .getContainerMetaDataPath(hddsVolumeDir, scmId, containerId);
+        .getContainerMetaDataPath(hddsVolumeDir, clusterId, containerId);
 
     File chunksPath = KeyValueContainerLocationUtil.getChunksLocationPath(
-        hddsVolumeDir, scmId, containerId);
+        hddsVolumeDir, clusterId, containerId);
     File dbFile = KeyValueContainerLocationUtil.getContainerDBFile(
         containerMetaDataPath, containerId);
 
@@ -466,7 +466,8 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
                 + " as the container descriptor (%s) has already been exist.",
             getContainerData().getContainerID(),
             getContainerFile().getAbsolutePath());
-        throw new IOException(errorMessage);
+        throw new StorageContainerException(errorMessage,
+            CONTAINER_ALREADY_EXISTS);
       }
       //copy the values from the input stream to the final destination
       // directory.
@@ -496,11 +497,17 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
       KeyValueContainerUtil.parseKVContainerData(containerData, config);
 
     } catch (Exception ex) {
+      if (ex instanceof StorageContainerException &&
+          ((StorageContainerException) ex).getResult() ==
+              CONTAINER_ALREADY_EXISTS) {
+        throw ex;
+      }
       //delete all the temporary data in case of any exception.
       try {
         FileUtils.deleteDirectory(new File(containerData.getMetadataPath()));
         FileUtils.deleteDirectory(new File(containerData.getChunksPath()));
-        FileUtils.deleteDirectory(getContainerFile());
+        FileUtils.deleteDirectory(
+            new File(getContainerData().getContainerPath()));
       } catch (Exception deleteex) {
         LOG.error(
             "Can not cleanup destination directories after a container import"
@@ -516,24 +523,44 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
   @Override
   public void exportContainerData(OutputStream destination,
       ContainerPacker<KeyValueContainerData> packer) throws IOException {
-    // Closed/ Quasi closed containers are considered for replication by
-    // replication manager if they are under-replicated.
-    ContainerProtos.ContainerDataProto.State state =
-        getContainerData().getState();
-    if (!(state == ContainerProtos.ContainerDataProto.State.CLOSED ||
-        state == ContainerDataProto.State.QUASI_CLOSED)) {
-      throw new IllegalStateException(
-          "Only closed/quasi closed containers could be exported: " +
-              "Where as ContainerId="
-              + getContainerData().getContainerID() + " is in state " + state);
+    writeLock();
+    try {
+      // Closed/ Quasi closed containers are considered for replication by
+      // replication manager if they are under-replicated.
+      ContainerProtos.ContainerDataProto.State state =
+          getContainerData().getState();
+      if (!(state == ContainerProtos.ContainerDataProto.State.CLOSED ||
+          state == ContainerDataProto.State.QUASI_CLOSED)) {
+        throw new IllegalStateException(
+            "Only (quasi)closed containers can be exported, but " +
+                "ContainerId=" + getContainerData().getContainerID() +
+                " is in state " + state);
+      }
+
+      try {
+        compactDB();
+        // Close DB (and remove from cache) to avoid concurrent modification
+        // while packing it.
+        BlockUtils.removeDB(containerData, config);
+      } finally {
+        readLock();
+        writeUnlock();
+      }
+
+      packer.pack(this, destination);
+    } finally {
+      if (lock.isWriteLockedByCurrentThread()) {
+        writeUnlock();
+      } else {
+        readUnlock();
+      }
     }
-    compactDB();
-    packer.pack(this, destination);
   }
 
   /**
    * Acquire read lock.
    */
+  @Override
   public void readLock() {
     this.lock.readLock().lock();
 
@@ -542,6 +569,7 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
   /**
    * Release read lock.
    */
+  @Override
   public void readUnlock() {
     this.lock.readLock().unlock();
   }
@@ -549,6 +577,7 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
   /**
    * Check if the current thread holds read lock.
    */
+  @Override
   public boolean hasReadLock() {
     return this.lock.readLock().tryLock();
   }
@@ -556,6 +585,7 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
   /**
    * Acquire write lock.
    */
+  @Override
   public void writeLock() {
     // TODO: The lock for KeyValueContainer object should not be exposed
     // publicly.
@@ -565,6 +595,7 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
   /**
    * Release write lock.
    */
+  @Override
   public void writeUnlock() {
     this.lock.writeLock().unlock();
 
@@ -573,6 +604,7 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
   /**
    * Check if the current thread holds write lock.
    */
+  @Override
   public boolean hasWriteLock() {
     return this.lock.writeLock().isHeldByCurrentThread();
   }
@@ -687,6 +719,7 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
         .getContainerID() + OzoneConsts.DN_CONTAINER_DB);
   }
 
+  @Override
   public boolean scanMetaData() {
     long containerId = containerData.getContainerID();
     KeyValueContainerCheck checker =
@@ -701,6 +734,7 @@ public class KeyValueContainer implements Container<KeyValueContainerData> {
         || containerData.getState() == ContainerDataProto.State.QUASI_CLOSED;
   }
 
+  @Override
   public boolean scanData(DataTransferThrottler throttler, Canceler canceler) {
     if (!shouldScanData()) {
       throw new IllegalStateException("The checksum verification can not be" +

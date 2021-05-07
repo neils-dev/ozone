@@ -29,6 +29,7 @@ import org.apache.hadoop.hdds.client.BlockID;
 import org.apache.hadoop.hdds.protocol.DatanodeDetails;
 import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos;
 import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.BlockData;
+import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.ChecksumType;
 import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.ChunkInfo;
 import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.CloseContainerRequestProto;
 import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.ContainerCommandRequestProto;
@@ -225,7 +226,8 @@ public final class ContainerProtocolCalls  {
     ReadChunkRequestProto.Builder readChunkRequest =
         ReadChunkRequestProto.newBuilder()
             .setBlockID(blockID.getDatanodeBlockIDProtobuf())
-            .setChunkData(chunk);
+            .setChunkData(chunk)
+            .setReadChunkVersion(ContainerProtos.ReadChunkVersion.V1);
     String id = xceiverClient.getPipeline().getClosestNode().getUuidString();
     ContainerCommandRequestProto.Builder builder =
         ContainerCommandRequestProto.newBuilder().setCmdType(Type.ReadChunk)
@@ -330,7 +332,8 @@ public final class ContainerProtocolCalls  {
     KeyValue keyValue =
         KeyValue.newBuilder().setKey("OverWriteRequested").setValue("true")
             .build();
-    Checksum checksum = new Checksum();
+
+    Checksum checksum = new Checksum(ChecksumType.CRC32, 256);
     final ChecksumData checksumData = checksum.computeChecksum(data);
     ChunkInfo chunk =
         ChunkInfo.newBuilder()
@@ -487,6 +490,7 @@ public final class ContainerProtocolCalls  {
     ContainerProtos.GetSmallFileRequestProto getSmallFileRequest =
         GetSmallFileRequestProto
             .newBuilder().setBlock(getBlock)
+            .setReadChunkVersion(ContainerProtos.ReadChunkVersion.V1)
             .build();
     String id = client.getPipeline().getClosestNode().getUuidString();
 

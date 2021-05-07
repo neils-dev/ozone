@@ -23,6 +23,7 @@ Test Timeout        5 minutes
 
 *** Variables ***
 ${ENDPOINT_URL}    http://s3g:9878
+${SCM}             scm
 
 *** Keywords ***
 Setup volume names
@@ -30,6 +31,7 @@ Setup volume names
     Set Suite Variable   ${volume1}            fstest${random}
     Set Suite Variable   ${volume2}            fstest2${random}
     Set Suite Variable   ${volume3}            fstest3${random}
+    Set Suite Variable   ${volume4}            fstest4${random}
 
 *** Test Cases ***
 Create volume bucket with wrong credentials
@@ -41,6 +43,22 @@ Create volume with non-admin user
     Run Keyword         Kinit test user     testuser2     testuser2.keytab
     ${rc}               ${output} =          Run And Return Rc And Output       ozone sh volume create o3://om/fstest
     Should contain      ${output}       doesn't have CREATE permission to access volume
+
+Create bucket with non-admin owner(testuser2)
+    Run Keyword   Kinit test user     testuser     testuser.keytab
+    Run Keyword   Setup volume names
+    Execute       ozone sh volume create o3://om/${volume4} -u testuser2
+    Run Keyword   Kinit test user     testuser2    testuser2.keytab
+    ${result} =   Execute     ozone sh bucket create o3://om/${volume4}/bucket1
+                  Should not contain  ${result}       PERMISSION_DENIED
+    ${result} =   Execute     ozone sh key put ${volume4}/bucket1/key1 /opt/hadoop/NOTICE.txt
+                  Should not contain  ${result}       PERMISSION_DENIED
+    ${result} =   Execute     ozone sh key list ${volume4}/bucket1
+                  Should not contain  ${result}       PERMISSION_DENIED
+    ${result} =   Execute     ozone sh key delete ${volume4}/bucket1/key1
+                  Should not contain  ${result}       PERMISSION_DENIED
+    ${result} =   Execute     ozone sh bucket delete ${volume4}/bucket1
+                  Should not contain  ${result}       PERMISSION_DENIED
 
 Create volume bucket with credentials
                         # Authenticate testuser
@@ -66,7 +84,7 @@ Test Volume Acls
     ${result} =     Execute             ozone sh volume removeacl ${volume3} -a user:superuser1:xy
     ${result} =     Execute             ozone sh volume getacl ${volume3}
     Should Match Regexp                 ${result}       \"type\" : \"USER\",\n.*\"name\" : \"superuser1\",\n.*\"aclScope\" : \"DEFAULT\",\n.*\"aclList\" : . \"READ\", \"WRITE\"
-    ${result} =     Execute             ozone sh volume setacl ${volume3} -al user:superuser1:rwxy,user:testuser/scm@EXAMPLE.COM:rwxyc,group:superuser1:a[DEFAULT]
+    ${result} =     Execute             ozone sh volume setacl ${volume3} -al user:superuser1:rwxy,user:testuser/${SCM}@EXAMPLE.COM:rwxyc,group:superuser1:a[DEFAULT]
     ${result} =     Execute             ozone sh volume getacl ${volume3}
     Should Match Regexp                 ${result}       \"type\" : \"USER\",\n.*\"name\" : \"superuser1\",\n.*\"aclScope\" : \"ACCESS\",\n.*\"aclList\" : . \"READ\", \"WRITE\", \"READ_ACL\", \"WRITE_ACL\"
     Should Match Regexp                 ${result}       \"type\" : \"GROUP\",\n.*\"name\" : \"superuser1\",\n.*\"aclScope\" : \"DEFAULT\",\n.*\"aclList\" : . \"ALL\"
@@ -82,7 +100,7 @@ Test Bucket Acls
     ${result} =     Execute             ozone sh bucket removeacl ${volume3}/bk1 -a user:superuser1:xy
     ${result} =     Execute             ozone sh bucket getacl ${volume3}/bk1
     Should Match Regexp                 ${result}       \"type\" : \"USER\",\n.*\"name\" : \"superuser1\",\n.*\"aclScope\" : \"ACCESS\",\n.*\"aclList\" : . \"READ\", \"WRITE\"
-    ${result} =     Execute             ozone sh bucket setacl ${volume3}/bk1 -al user:superuser1:rwxy,group:superuser1:a,user:testuser/scm@EXAMPLE.COM:rwxyc,group:superuser1:a[DEFAULT]
+    ${result} =     Execute             ozone sh bucket setacl ${volume3}/bk1 -al user:superuser1:rwxy,group:superuser1:a,user:testuser/${SCM}@EXAMPLE.COM:rwxyc,group:superuser1:a[DEFAULT]
     ${result} =     Execute             ozone sh bucket getacl ${volume3}/bk1
     Should Match Regexp                 ${result}       \"type\" : \"USER\",\n.*\"name\" : \"superuser1\",\n.*\"aclScope\" : \"ACCESS\",\n.*\"aclList\" : . \"READ\", \"WRITE\", \"READ_ACL\", \"WRITE_ACL\"
     Should Match Regexp                 ${result}       \"type\" : \"GROUP\",\n.*\"name\" : \"superuser1\",\n.*\"aclScope\" : \"ACCESS\",\n.*\"aclList\" : . \"ALL\"
@@ -97,7 +115,7 @@ Test key Acls
     ${result} =     Execute             ozone sh key removeacl ${volume3}/bk1/key1 -a user:superuser1:xy
     ${result} =     Execute             ozone sh key getacl ${volume3}/bk1/key1
     Should Match Regexp                 ${result}       \"type\" : \"USER\",\n.*\"name\" : \"superuser1\",\n.*\"aclScope\" : \"ACCESS\",\n.*\"aclList\" : . \"READ\", \"WRITE\"
-    ${result} =     Execute             ozone sh key setacl ${volume3}/bk1/key1 -al user:superuser1:rwxy,group:superuser1:a,user:testuser/scm@EXAMPLE.COM:rwxyc
+    ${result} =     Execute             ozone sh key setacl ${volume3}/bk1/key1 -al user:superuser1:rwxy,group:superuser1:a,user:testuser/${SCM}@EXAMPLE.COM:rwxyc
     ${result} =     Execute             ozone sh key getacl ${volume3}/bk1/key1
     Should Match Regexp                 ${result}       \"type\" : \"USER\",\n.*\"name\" : \"superuser1\",\n.*\"aclScope\" : \"ACCESS\",\n.*\"aclList\" : . \"READ\", \"WRITE\", \"READ_ACL\", \"WRITE_ACL\"
     Should Match Regexp                 ${result}       \"type\" : \"GROUP\",\n.*\"name\" : \"superuser1\",\n.*\"aclScope\" : \"ACCESS\",\n.*\"aclList\" : . \"ALL\"
@@ -110,16 +128,16 @@ Test native authorizer
                     Should contain      ${result}    PERMISSION_DENIED
     ${result} =     Execute And Ignore Error         ozone sh key list /${volume3}/bk1      
                     Should contain      ${result}    PERMISSION_DENIED
-    ${result} =     Execute And Ignore Error         ozone sh volume addacl ${volume3} -a user:testuser2/scm@EXAMPLE.COM:xy
-                    Should contain      ${result}    PERMISSION_DENIED User testuser2/scm@EXAMPLE.COM doesn't have WRITE_ACL permission to access volume
+    ${result} =     Execute And Ignore Error         ozone sh volume addacl ${volume3} -a user:testuser2/${SCM}@EXAMPLE.COM:xy
+                    Should contain      ${result}    PERMISSION_DENIED User testuser2/${SCM}@EXAMPLE.COM doesn't have WRITE_ACL permission to access volume
     Execute         kdestroy
     Run Keyword     Kinit test user     testuser     testuser.keytab
-    Execute         ozone sh volume addacl ${volume3} -a user:testuser2/scm@EXAMPLE.COM:xyrw
+    Execute         ozone sh volume addacl ${volume3} -a user:testuser2/${SCM}@EXAMPLE.COM:xyrw
     Execute         kdestroy
     Run Keyword     Kinit test user     testuser2    testuser2.keytab
     ${result} =     Execute And Ignore Error         ozone sh bucket list /${volume3}/
-                    Should contain      ${result}    PERMISSION_DENIED User testuser2/scm@EXAMPLE.COM doesn't have LIST permission to access volume
-    Execute         ozone sh volume addacl ${volume3} -a user:testuser2/scm@EXAMPLE.COM:l
+                    Should contain      ${result}    PERMISSION_DENIED User testuser2/${SCM}@EXAMPLE.COM doesn't have LIST permission to access volume
+    Execute         ozone sh volume addacl ${volume3} -a user:testuser2/${SCM}@EXAMPLE.COM:l
     Execute         ozone sh bucket list /${volume3}/
     Execute         ozone sh volume getacl /${volume3}/
     
@@ -127,7 +145,7 @@ Test native authorizer
     Should contain      ${result}    PERMISSION_DENIED
     Execute         kdestroy
     Run Keyword     Kinit test user     testuser     testuser.keytab
-    Execute         ozone sh bucket addacl ${volume3}/bk1 -a user:testuser2/scm@EXAMPLE.COM:a
+    Execute         ozone sh bucket addacl ${volume3}/bk1 -a user:testuser2/${SCM}@EXAMPLE.COM:a
     Execute         ozone sh bucket getacl /${volume3}/bk1
     Execute         kdestroy
     Run Keyword     Kinit test user     testuser2    testuser2.keytab

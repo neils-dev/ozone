@@ -43,10 +43,11 @@ import org.apache.hadoop.hdds.utils.db.TableIterator;
 import org.apache.hadoop.hdds.utils.db.TypedTable;
 import org.apache.hadoop.hdds.utils.db.cache.CacheKey;
 import org.apache.hadoop.hdds.utils.db.cache.CacheValue;
-import org.apache.hadoop.hdds.utils.db.cache.TableCacheImpl;
+import org.apache.hadoop.hdds.utils.db.cache.TableCache.CacheType;
+import org.apache.hadoop.ozone.OmUtils;
 import org.apache.hadoop.ozone.OzoneConsts;
 import org.apache.hadoop.ozone.common.BlockGroup;
-import org.apache.hadoop.ozone.om.codec.OMTransactionInfoCodec;
+import org.apache.hadoop.hdds.utils.TransactionInfoCodec;
 import org.apache.hadoop.ozone.om.codec.OmBucketInfoCodec;
 import org.apache.hadoop.ozone.om.codec.OmKeyInfoCodec;
 import org.apache.hadoop.ozone.om.codec.OmMultipartKeyInfoCodec;
@@ -69,7 +70,7 @@ import org.apache.hadoop.ozone.om.helpers.OzoneFSUtils;
 import org.apache.hadoop.ozone.om.helpers.RepeatedOmKeyInfo;
 import org.apache.hadoop.ozone.om.helpers.S3SecretValue;
 import org.apache.hadoop.ozone.om.lock.OzoneManagerLock;
-import org.apache.hadoop.ozone.om.ratis.OMTransactionInfo;
+import org.apache.hadoop.hdds.utils.TransactionInfo;
 import org.apache.hadoop.ozone.storage.proto
     .OzoneManagerStorageProtos.PersistedUserVolumeInfo;
 import org.apache.hadoop.ozone.security.OzoneTokenIdentifier;
@@ -162,6 +163,15 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
   private boolean isRatisEnabled;
   private boolean ignorePipelineinKey;
 
+  // Epoch is used to generate the objectIDs. The most significant 2 bits of
+  // objectIDs is set to this epoch. For clusters before HDDS-4315 there is
+  // no epoch as such. But it can be safely assumed that the most significant
+  // 2 bits of the objectID will be 00. From HDDS-4315 onwards, the Epoch for
+  // non-ratis OM clusters will be binary 01 (= decimal 1)  and for ratis
+  // enabled OM cluster will be binary 10 (= decimal 2). This epoch is added
+  // to ensure uniqueness of objectIDs.
+  private final long omEpoch;
+
   private Map<String, Table> tableMap = new HashMap<>();
 
   public OmMetadataManagerImpl(OzoneConfiguration conf) throws IOException {
@@ -176,6 +186,7 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
     isRatisEnabled = conf.getBoolean(
         OMConfigKeys.OZONE_OM_RATIS_ENABLE_KEY,
         OMConfigKeys.OZONE_OM_RATIS_ENABLE_DEFAULT);
+    this.omEpoch = OmUtils.getOMEpoch(isRatisEnabled);
     // For test purpose only
     ignorePipelineinKey = conf.getBoolean(
         "ozone.om.ignore.pipeline", Boolean.TRUE);
@@ -189,6 +200,7 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
     this.lock = new OzoneManagerLock(new OzoneConfiguration());
     this.openKeyExpireThresholdMS =
         OZONE_OPEN_KEY_EXPIRE_THRESHOLD_SECONDS_DEFAULT;
+    this.omEpoch = 0;
   }
 
   @Override
@@ -196,6 +208,7 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
     return userTable;
   }
 
+  @Override
   public Table<OzoneTokenIdentifier, Long> getDelegationTokenTable() {
     return dTokenTable;
   }
@@ -235,7 +248,6 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
     return multipartInfoTable;
   }
 
-
   private void checkTableStatus(Table table, String name) throws IOException {
     String logMessage = "Unable to get a reference to %s table. Cannot " +
         "continue.";
@@ -260,7 +272,7 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
 
       // Check if there is a DB Inconsistent Marker in the metaDir. This
       // marker indicates that the DB is in an inconsistent state and hence
-      // the OM process should be terminated.
+      // the SCM process should be terminated.
       File markerFile = new File(metaDir, DB_TRANSIENT_MARKER);
       if (markerFile.exists()) {
         LOG.error("File {} marks that OM DB is in an inconsistent state.",
@@ -311,7 +323,7 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
     return dbStore;
   }
 
-  protected static DBStoreBuilder addOMTablesAndCodecs(DBStoreBuilder builder) {
+  public static DBStoreBuilder addOMTablesAndCodecs(DBStoreBuilder builder) {
 
     return builder.addTable(USER_TABLE)
         .addTable(VOLUME_TABLE)
@@ -334,7 +346,7 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
         .addCodec(OmMultipartKeyInfo.class, new OmMultipartKeyInfoCodec())
         .addCodec(S3SecretValue.class, new S3SecretValueCodec())
         .addCodec(OmPrefixInfo.class, new OmPrefixInfoCodec())
-        .addCodec(OMTransactionInfo.class, new OMTransactionInfoCodec());
+        .addCodec(TransactionInfo.class, new TransactionInfoCodec());
   }
 
   /**
@@ -348,17 +360,16 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
             PersistedUserVolumeInfo.class);
     checkTableStatus(userTable, USER_TABLE);
 
-    TableCacheImpl.CacheCleanupPolicy cleanupPolicy =
-        TableCacheImpl.CacheCleanupPolicy.NEVER;
+    CacheType cacheType = CacheType.FULL_CACHE;
 
     volumeTable =
         this.store.getTable(VOLUME_TABLE, String.class, OmVolumeArgs.class,
-            cleanupPolicy);
+            cacheType);
     checkTableStatus(volumeTable, VOLUME_TABLE);
 
     bucketTable =
         this.store.getTable(BUCKET_TABLE, String.class, OmBucketInfo.class,
-            cleanupPolicy);
+            cacheType);
 
     checkTableStatus(bucketTable, BUCKET_TABLE);
 
@@ -390,7 +401,7 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
     checkTableStatus(prefixTable, PREFIX_TABLE);
 
     transactionInfoTable = this.store.getTable(TRANSACTION_INFO_TABLE,
-        String.class, OMTransactionInfo.class);
+        String.class, TransactionInfo.class);
     checkTableStatus(transactionInfoTable, TRANSACTION_INFO_TABLE);
   }
 
@@ -497,6 +508,11 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
   @Override
   public org.apache.hadoop.ozone.om.lock.OzoneManagerLock getLock() {
     return lock;
+  }
+
+  @Override
+  public long getOmEpoch() {
+    return omEpoch;
   }
 
   /**
@@ -717,6 +733,18 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
   }
 
   @Override
+  public Iterator<Map.Entry<CacheKey<String>, CacheValue<OmBucketInfo>>>
+      getBucketIterator(){
+    return bucketTable.cacheIterator();
+  }
+
+  @Override
+  public TableIterator<String, ? extends KeyValue<String, OmKeyInfo>>
+      getKeyIterator(){
+    return keyTable.iterator();
+  }
+
+  @Override
   public List<OmKeyInfo> listKeys(String volumeName, String bucketName,
       String startKey, String keyPrefix, int maxKeys) throws IOException {
 
@@ -749,7 +777,8 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
       skipStartKey = true;
     } else {
       // This allows us to seek directly to the first key with the right prefix.
-      seekKey = getOzoneKey(volumeName, bucketName, keyPrefix);
+      seekKey = getOzoneKey(volumeName, bucketName,
+          StringUtil.isNotBlank(keyPrefix) ? keyPrefix : OM_KEY_PREFIX);
     }
 
     String seekPrefix;
@@ -1104,7 +1133,7 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
   }
 
   @Override
-  public Table<String, OMTransactionInfo> getTransactionInfoTable() {
+  public Table<String, TransactionInfo> getTransactionInfoTable() {
     return transactionInfoTable;
   }
 

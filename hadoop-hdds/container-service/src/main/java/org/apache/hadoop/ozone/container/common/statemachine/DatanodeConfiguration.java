@@ -20,10 +20,13 @@ import org.apache.hadoop.hdds.conf.Config;
 import org.apache.hadoop.hdds.conf.ConfigGroup;
 import org.apache.hadoop.hdds.conf.ConfigType;
 import org.apache.hadoop.hdds.conf.PostConstruct;
+import org.apache.hadoop.hdds.conf.ConfigTag;
 
 import static org.apache.hadoop.hdds.conf.ConfigTag.DATANODE;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
 
 /**
  * Configuration class used for high level datanode configuration parameters.
@@ -38,8 +41,12 @@ public class DatanodeConfiguration {
       "hdds.datanode.replication.streams.limit";
   static final String CONTAINER_DELETE_THREADS_MAX_KEY =
       "hdds.datanode.container.delete.threads.max";
+  static final String PERIODIC_DISK_CHECK_INTERVAL_MINUTES_KEY =
+      "hdds.datanode.periodic.disk.check.interval.minutes";
 
   static final int REPLICATION_MAX_STREAMS_DEFAULT = 10;
+
+  static final long PERIODIC_DISK_CHECK_INTERVAL_MINUTES_DEFAULT = 15;
 
   /**
    * The maximum number of replication commands a single datanode can execute
@@ -69,6 +76,53 @@ public class DatanodeConfiguration {
   )
   private int containerDeleteThreads = CONTAINER_DELETE_THREADS_DEFAULT;
 
+  @Config(key = "block.deleting.service.interval",
+          defaultValue = "60s",
+          type = ConfigType.TIME,
+          tags = { ConfigTag.SCM, ConfigTag.DELETION },
+          description =
+                  "Time interval of the Datanode block deleting service. The "
+                          + "block deleting service runs on Datanode "
+                          + "periodically and deletes blocks queued for "
+                          + "deletion. Unit could be defined with "
+                          + "postfix (ns,ms,s,m,h,d). "
+  )
+  private long blockDeletionInterval = Duration.ofSeconds(60).toMillis();
+
+  public Duration getBlockDeletionInterval() {
+    return Duration.ofMillis(blockDeletionInterval);
+  }
+
+  public void setBlockDeletionInterval(Duration duration) {
+    this.blockDeletionInterval = duration.toMillis();
+  }
+
+  @Config(key = "block.deleting.limit.per.interval",
+      defaultValue = "5000",
+      type = ConfigType.INT,
+      tags = { ConfigTag.SCM, ConfigTag.DELETION },
+      description =
+          "Number of blocks to be deleted in an interval."
+  )
+  private int blockLimitPerInterval = 5000;
+
+  public int getBlockDeletionLimit() {
+    return blockLimitPerInterval;
+  }
+
+  public void setBlockDeletionLimit(int limit) {
+    this.blockLimitPerInterval = limit;
+  }
+
+  @Config(key = "periodic.disk.check.interval.minutes",
+      defaultValue = "15",
+      type = ConfigType.LONG,
+      tags = { DATANODE },
+      description = "Periodic disk check run interval in minutes."
+  )
+  private long periodicDiskCheckIntervalMinutes =
+      PERIODIC_DISK_CHECK_INTERVAL_MINUTES_DEFAULT;
+
   @PostConstruct
   public void validate() {
     if (replicationMaxStreams < 1) {
@@ -83,6 +137,15 @@ public class DatanodeConfiguration {
               " and was set to {}. Defaulting to {}",
           containerDeleteThreads, CONTAINER_DELETE_THREADS_DEFAULT);
       containerDeleteThreads = CONTAINER_DELETE_THREADS_DEFAULT;
+    }
+
+    if (periodicDiskCheckIntervalMinutes < 1) {
+      LOG.warn(PERIODIC_DISK_CHECK_INTERVAL_MINUTES_KEY +
+              " must be greater than zero and was set to {}. Defaulting to {}",
+          periodicDiskCheckIntervalMinutes,
+          PERIODIC_DISK_CHECK_INTERVAL_MINUTES_DEFAULT);
+      periodicDiskCheckIntervalMinutes =
+          PERIODIC_DISK_CHECK_INTERVAL_MINUTES_DEFAULT;
     }
   }
 
@@ -102,4 +165,12 @@ public class DatanodeConfiguration {
     return containerDeleteThreads;
   }
 
+  public long getPeriodicDiskCheckIntervalMinutes() {
+    return periodicDiskCheckIntervalMinutes;
+  }
+
+  public void setPeriodicDiskCheckIntervalMinutes(
+      long periodicDiskCheckIntervalMinutes) {
+    this.periodicDiskCheckIntervalMinutes = periodicDiskCheckIntervalMinutes;
+  }
 }

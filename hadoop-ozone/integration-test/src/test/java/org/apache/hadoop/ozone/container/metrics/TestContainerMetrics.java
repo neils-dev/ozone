@@ -47,9 +47,6 @@ import org.apache.hadoop.ozone.container.common.transport.server.XceiverServerGr
 import org.apache.hadoop.ozone.container.common.volume.HddsVolume;
 import org.apache.hadoop.ozone.container.common.volume.MutableVolumeSet;
 import org.apache.hadoop.ozone.container.common.volume.VolumeSet;
-import org.apache.hadoop.ozone.container.ozoneimpl.ContainerController;
-import org.apache.hadoop.ozone.container.replication.GrpcReplicationService;
-import org.apache.hadoop.ozone.container.replication.OnDemandContainerReplicationSource;
 import org.apache.hadoop.test.GenericTestUtils;
 
 import com.google.common.collect.Maps;
@@ -72,13 +69,7 @@ public class TestContainerMetrics {
     * Set a timeout for each test.
     */
   @Rule
-  public Timeout timeout = new Timeout(300000);
-
-  private GrpcReplicationService createReplicationService(
-      ContainerController controller) {
-    return new GrpcReplicationService(
-        new OnDemandContainerReplicationSource(controller));
-  }
+  public Timeout timeout = Timeout.seconds(300);
 
   @Test
   public void testContainerMetrics() throws Exception {
@@ -121,11 +112,9 @@ public class TestContainerMetrics {
       }
       HddsDispatcher dispatcher = new HddsDispatcher(conf, containerSet,
           volumeSet, handlers, context, metrics, null);
-      dispatcher.setScmId(UUID.randomUUID().toString());
+      dispatcher.setClusterId(UUID.randomUUID().toString());
 
-      server = new XceiverServerGrpc(datanodeDetails, conf, dispatcher, null,
-          createReplicationService(new ContainerController(
-              containerSet, handlers)));
+      server = new XceiverServerGrpc(datanodeDetails, conf, dispatcher, null);
       client = new XceiverClientGrpc(pipeline, conf);
 
       server.start();

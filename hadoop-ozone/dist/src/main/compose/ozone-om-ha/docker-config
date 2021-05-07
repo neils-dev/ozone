@@ -33,6 +33,7 @@ OZONE-SITE.XML_ozone.replication=1
 OZONE-SITE.XML_ozone.client.failover.max.attempts=6
 OZONE-SITE.XML_hdds.datanode.dir=/data/hdds
 OZONE-SITE.XML_hdds.profiler.endpoint.enabled=true
+OZONE-SITE.XML_hdds.scmclient.max.retry.timeout=30s
 HDFS-SITE.XML_rpc.metrics.quantile.enable=true
 HDFS-SITE.XML_rpc.metrics.percentiles.intervals=60,300
 ASYNC_PROFILER_HOME=/opt/profiler
@@ -84,5 +85,8 @@ LOG4J2.PROPERTIES_logger.audit.appenderRef.file.ref=RollingFile
 LOG4J2.PROPERTIES_rootLogger.level=INFO
 LOG4J2.PROPERTIES_rootLogger.appenderRefs=stdout
 LOG4J2.PROPERTIES_rootLogger.appenderRef.stdout.ref=STDOUT
+
+OZONE_CONF_DIR=/etc/hadoop
+OZONE_LOG_DIR=/var/log/hadoop
 
 no_proxy=om,scm,s3g,recon,kdc,localhost,127.0.0.1

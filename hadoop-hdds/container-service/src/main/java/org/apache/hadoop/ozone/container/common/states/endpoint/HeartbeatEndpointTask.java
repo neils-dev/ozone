@@ -52,6 +52,7 @@ import org.apache.hadoop.ozone.protocol.commands.DeleteBlocksCommand;
 import org.apache.hadoop.ozone.protocol.commands.DeleteContainerCommand;
 import org.apache.hadoop.ozone.protocol.commands.ReplicateContainerCommand;
 
+import org.apache.hadoop.ozone.protocol.commands.SetNodeOperationalStateCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -141,15 +142,15 @@ public class HeartbeatEndpointTask
       if (LOG.isDebugEnabled()) {
         LOG.debug("Sending heartbeat message :: {}", request.toString());
       }
-      SCMHeartbeatResponseProto reponse = rpcEndpoint.getEndPoint()
+      SCMHeartbeatResponseProto response = rpcEndpoint.getEndPoint()
           .sendHeartbeat(request);
-      processResponse(reponse, datanodeDetailsProto);
+      processResponse(response, datanodeDetailsProto);
       rpcEndpoint.setLastSuccessfulHeartbeat(ZonedDateTime.now());
       rpcEndpoint.zeroMissedCount();
     } catch (IOException ex) {
+      Preconditions.checkState(requestBuilder != null);
       // put back the reports which failed to be sent
       putBackReports(requestBuilder);
-
       rpcEndpoint.logIfNeeded(ex);
     } finally {
       rpcEndpoint.unlock();
@@ -160,12 +161,9 @@ public class HeartbeatEndpointTask
   // TODO: Make it generic.
   private void putBackReports(SCMHeartbeatRequestProto.Builder requestBuilder) {
     List<GeneratedMessage> reports = new LinkedList<>();
-    if (requestBuilder.hasContainerReport()) {
-      reports.add(requestBuilder.getContainerReport());
-    }
-    if (requestBuilder.hasNodeReport()) {
-      reports.add(requestBuilder.getNodeReport());
-    }
+    // We only put back CommandStatusReports and IncrementalContainerReport
+    // because those are incremental. Container/Node/PipelineReport are
+    // accumulative so we can keep only the latest of each.
     if (requestBuilder.getCommandStatusReportsCount() != 0) {
       reports.addAll(requestBuilder.getCommandStatusReportsList());
     }
@@ -193,6 +191,7 @@ public class HeartbeatEndpointTask
           } else {
             requestBuilder.setField(descriptor, report);
           }
+          break;
         }
       }
     }
@@ -272,6 +271,9 @@ public class HeartbeatEndpointTask
         DeleteBlocksCommand db = DeleteBlocksCommand
             .getFromProtobuf(
                 commandResponseProto.getDeleteBlocksCommandProto());
+        if (commandResponseProto.hasTerm()) {
+          db.setTerm(commandResponseProto.getTerm());
+        }
         if (!db.blocksTobeDeleted().isEmpty()) {
           if (LOG.isDebugEnabled()) {
             LOG.debug(DeletedContainerBlocksSummary
@@ -285,6 +287,9 @@ public class HeartbeatEndpointTask
         CloseContainerCommand closeContainer =
             CloseContainerCommand.getFromProtobuf(
                 commandResponseProto.getCloseContainerCommandProto());
+        if (commandResponseProto.hasTerm()) {
+          closeContainer.setTerm(commandResponseProto.getTerm());
+        }
         if (LOG.isDebugEnabled()) {
           LOG.debug("Received SCM container close request for container {}",
               closeContainer.getContainerID());
@@ -295,6 +300,9 @@ public class HeartbeatEndpointTask
         ReplicateContainerCommand replicateContainerCommand =
             ReplicateContainerCommand.getFromProtobuf(
                 commandResponseProto.getReplicateContainerCommandProto());
+        if (commandResponseProto.hasTerm()) {
+          replicateContainerCommand.setTerm(commandResponseProto.getTerm());
+        }
         if (LOG.isDebugEnabled()) {
           LOG.debug("Received SCM container replicate request for container {}",
               replicateContainerCommand.getContainerID());
@@ -305,6 +313,9 @@ public class HeartbeatEndpointTask
         DeleteContainerCommand deleteContainerCommand =
             DeleteContainerCommand.getFromProtobuf(
                 commandResponseProto.getDeleteContainerCommandProto());
+        if (commandResponseProto.hasTerm()) {
+          deleteContainerCommand.setTerm(commandResponseProto.getTerm());
+        }
         if (LOG.isDebugEnabled()) {
           LOG.debug("Received SCM delete container request for container {}",
               deleteContainerCommand.getContainerID());
@@ -315,6 +326,9 @@ public class HeartbeatEndpointTask
         CreatePipelineCommand createPipelineCommand =
             CreatePipelineCommand.getFromProtobuf(
                 commandResponseProto.getCreatePipelineCommandProto());
+        if (commandResponseProto.hasTerm()) {
+          createPipelineCommand.setTerm(commandResponseProto.getTerm());
+        }
         if (LOG.isDebugEnabled()) {
           LOG.debug("Received SCM create pipeline request {}",
               createPipelineCommand.getPipelineID());
@@ -325,11 +339,29 @@ public class HeartbeatEndpointTask
         ClosePipelineCommand closePipelineCommand =
             ClosePipelineCommand.getFromProtobuf(
                 commandResponseProto.getClosePipelineCommandProto());
+        if (commandResponseProto.hasTerm()) {
+          closePipelineCommand.setTerm(commandResponseProto.getTerm());
+        }
         if (LOG.isDebugEnabled()) {
           LOG.debug("Received SCM close pipeline request {}",
               closePipelineCommand.getPipelineID());
         }
         this.context.addCommand(closePipelineCommand);
+        break;
+      case setNodeOperationalStateCommand:
+        SetNodeOperationalStateCommand setNodeOperationalStateCommand =
+            SetNodeOperationalStateCommand.getFromProtobuf(
+                commandResponseProto.getSetNodeOperationalStateCommandProto());
+        if (commandResponseProto.hasTerm()) {
+          setNodeOperationalStateCommand.setTerm(
+              commandResponseProto.getTerm());
+        }
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Received SCM set operational state command. State: {} " +
+              "Expiry: {}", setNodeOperationalStateCommand.getOpState(),
+              setNodeOperationalStateCommand.getStateExpiryEpochSeconds());
+        }
+        this.context.addCommand(setNodeOperationalStateCommand);
         break;
       default:
         throw new IllegalArgumentException("Unknown response : "

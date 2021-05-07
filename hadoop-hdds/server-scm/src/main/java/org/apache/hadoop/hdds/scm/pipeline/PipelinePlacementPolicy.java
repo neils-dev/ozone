@@ -20,14 +20,17 @@ package org.apache.hadoop.hdds.scm.pipeline;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import org.apache.hadoop.hdds.client.RatisReplicationConfig;
 import org.apache.hadoop.hdds.conf.ConfigurationSource;
 import org.apache.hadoop.hdds.protocol.DatanodeDetails;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
+import org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationFactor;
 import org.apache.hadoop.hdds.scm.ScmConfigKeys;
 import org.apache.hadoop.hdds.scm.SCMCommonPlacementPolicy;
 import org.apache.hadoop.hdds.scm.exceptions.SCMException;
 import org.apache.hadoop.hdds.scm.net.NetworkTopology;
 import org.apache.hadoop.hdds.scm.node.NodeManager;
+import org.apache.hadoop.hdds.scm.node.NodeStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,7 +54,7 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
   static final Logger LOG =
       LoggerFactory.getLogger(PipelinePlacementPolicy.class);
   private final NodeManager nodeManager;
-  private final PipelineStateManager stateManager;
+  private final StateManager stateManager;
   private final ConfigurationSource conf;
   private final int heavyNodeCriteria;
   private static final int REQUIRED_RACKS = 2;
@@ -70,7 +73,8 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
    * @param conf        Configuration
    */
   public PipelinePlacementPolicy(final NodeManager nodeManager,
-      final PipelineStateManager stateManager, final ConfigurationSource conf) {
+                                 final StateManager stateManager,
+                                 final ConfigurationSource conf) {
     super(nodeManager, conf);
     this.nodeManager = nodeManager;
     this.conf = conf;
@@ -96,9 +100,16 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
         continue;
       }
       if (pipeline != null &&
-          pipeline.getFactor().getNumber() == nodesRequired &&
+          // single node pipeline are not accounted for while determining
+          // the pipeline limit for dn
           pipeline.getType() == HddsProtos.ReplicationType.RATIS &&
-          pipeline.getPipelineState() == Pipeline.PipelineState.CLOSED) {
+          (RatisReplicationConfig
+              .hasFactor(pipeline.getReplicationConfig(), ReplicationFactor.ONE)
+              ||
+              pipeline.getReplicationConfig().getRequiredNodes()
+                  == nodesRequired &&
+                  pipeline.getPipelineState()
+                      == Pipeline.PipelineState.CLOSED)) {
         pipelineNumDeductable++;
       }
     }
@@ -123,7 +134,7 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
       throws SCMException {
     // get nodes in HEALTHY state
     List<DatanodeDetails> healthyNodes =
-        nodeManager.getNodes(HddsProtos.NodeState.HEALTHY);
+        nodeManager.getNodes(NodeStatus.inServiceHealthy());
     boolean multipleRacks = multipleRacksAvailable(healthyNodes);
     if (excludedNodes != null) {
       healthyNodes.removeAll(excludedNodes);
@@ -233,8 +244,7 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
 
   // Fall back logic for node pick up.
   DatanodeDetails fallBackPickNodes(
-      List<DatanodeDetails> nodeSet, List<DatanodeDetails> excludedNodes)
-      throws SCMException{
+      List<DatanodeDetails> nodeSet, List<DatanodeDetails> excludedNodes) {
     DatanodeDetails node;
     if (excludedNodes == null || excludedNodes.isEmpty()) {
       node = chooseNode(nodeSet);
@@ -242,14 +252,6 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
       List<DatanodeDetails> inputNodes = nodeSet.stream()
           .filter(p -> !excludedNodes.contains(p)).collect(Collectors.toList());
       node = chooseNode(inputNodes);
-    }
-
-    if (node == null) {
-      String msg = String.format("Unable to find fall back node in" +
-          " pipeline allocation. nodeSet size: {}", nodeSet.size());
-      LOG.warn(msg);
-      throw new SCMException(msg,
-          SCMException.ResultCodes.FAILED_TO_FIND_SUITABLE_NODE);
     }
     return node;
   }
@@ -332,6 +334,13 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
         results.add(pick);
         exclude.add(pick);
         LOG.debug("Remaining node chosen: {}", pick);
+      } else {
+        String msg = String.format("Unable to find suitable node in " +
+            "pipeline allocation. healthyNodes size: %d, " +
+            "excludeNodes size: %d", healthyNodes.size(), exclude.size());
+        LOG.warn(msg);
+        throw new SCMException(msg,
+            SCMException.ResultCodes.FAILED_TO_FIND_SUITABLE_NODE);
       }
     }
 
@@ -350,17 +359,17 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
    * list that we are operating on.
    *
    * @param healthyNodes - Set of healthy nodes we can choose from.
-   * @return chosen datanodDetails
+   * @return chosen datanodeDetails
    */
   @Override
-  public DatanodeDetails chooseNode(
-      List<DatanodeDetails> healthyNodes) {
+  public DatanodeDetails chooseNode(final List<DatanodeDetails> healthyNodes) {
     if (healthyNodes == null || healthyNodes.isEmpty()) {
       return null;
     }
-    DatanodeDetails datanodeDetails = healthyNodes.get(0);
-    healthyNodes.remove(datanodeDetails);
-    return datanodeDetails;
+    DatanodeDetails selectedNode =
+            healthyNodes.get(getRand().nextInt(healthyNodes.size()));
+    healthyNodes.remove(selectedNode);
+    return selectedNode;
   }
 
   /**

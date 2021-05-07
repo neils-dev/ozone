@@ -19,7 +19,6 @@
 package org.apache.hadoop.ozone.om.request.volume;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -27,7 +26,6 @@ import com.google.common.base.Preconditions;
 
 import org.apache.hadoop.ozone.OmUtils;
 import org.apache.hadoop.ozone.om.ratis.utils.OzoneManagerDoubleBufferHelper;
-import org.apache.hadoop.ozone.om.request.file.OMFileRequest;
 import org.apache.hadoop.ozone.om.request.util.OmResponseUtil;
 import org.apache.hadoop.ozone.security.acl.IAccessAuthorizer;
 import org.apache.hadoop.ozone.security.acl.OzoneObj;
@@ -119,14 +117,14 @@ public class OMVolumeCreateRequest extends OMVolumeRequest {
     IOException exception = null;
     OMClientResponse omClientResponse = null;
     OmVolumeArgs omVolumeArgs = null;
-    Map<String, String> auditMap = new HashMap<>();
+    Map<String, String> auditMap = null;
     try {
       omVolumeArgs = OmVolumeArgs.getFromProtobuf(volumeInfo);
       // when you create a volume, we set both Object ID and update ID.
       // The Object ID will never change, but update
       // ID will be set to transactionID each time we update the object.
       omVolumeArgs.setObjectID(
-          OMFileRequest.getObjIDFromTxId(transactionLogIndex));
+          ozoneManager.getObjectIdFromTxId(transactionLogIndex));
       omVolumeArgs.setUpdateID(transactionLogIndex,
           ozoneManager.isRatisEnabled());
 

@@ -32,6 +32,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.hadoop.hdds.utils.TransactionInfo;
+import org.apache.hadoop.ozone.common.ha.ratis.RatisSnapshotInfo;
 import org.apache.hadoop.ozone.om.OzoneManager;
 import org.apache.hadoop.ozone.om.exceptions.OMException;
 import org.apache.hadoop.ozone.om.helpers.OMRatisHelper;
@@ -80,7 +82,7 @@ public class OzoneManagerStateMachine extends BaseStateMachine {
   private RequestHandler handler;
   private RaftGroupId raftGroupId;
   private OzoneManagerDoubleBuffer ozoneManagerDoubleBuffer;
-  private final OMRatisSnapshotInfo snapshotInfo;
+  private final RatisSnapshotInfo snapshotInfo;
   private final ExecutorService executorService;
   private final ExecutorService installSnapshotExecutor;
   private final boolean isTracingEnabled;
@@ -149,7 +151,7 @@ public class OzoneManagerStateMachine extends BaseStateMachine {
    * @param index index which is being updated
    */
   @Override
-  public void notifyIndexUpdate(long currentTerm, long index) {
+  public void notifyTermIndexUpdated(long currentTerm, long index) {
     // SnapshotInfo should be updated when the term changes.
     // The index here refers to the log entry index and the index in
     // SnapshotInfo represents the snapshotIndex i.e. the index of the last
@@ -317,7 +319,7 @@ public class OzoneManagerStateMachine extends BaseStateMachine {
     getLifeCycle().startAndTransition(() -> {
       this.ozoneManagerDoubleBuffer = buildDoubleBufferForRatis();
       handler.updateDoubleBuffer(ozoneManagerDoubleBuffer);
-      this.setLastAppliedTermIndex(TermIndex.newTermIndex(
+      this.setLastAppliedTermIndex(TermIndex.valueOf(
           newLastAppliedSnapShotTermIndex, newLastAppliedSnaphsotIndex));
     });
   }
@@ -380,7 +382,6 @@ public class OzoneManagerStateMachine extends BaseStateMachine {
   @Override
   public void notifyNotLeader(Collection<TransactionContext> pendingEntries)
       throws IOException {
-    omRatisServer.updateServerRole();
   }
 
   @Override
@@ -506,15 +507,15 @@ public class OzoneManagerStateMachine extends BaseStateMachine {
     // This is done, as we have a check in Ratis for not throwing
     // LeaderNotReadyException, it checks stateMachineIndex >= raftLog
     // nextIndex (placeHolderIndex).
-    OMTransactionInfo omTransactionInfo =
-        OMTransactionInfo.readTransactionInfo(
+    TransactionInfo transactionInfo =
+        TransactionInfo.readTransactionInfo(
             ozoneManager.getMetadataManager());
-    if (omTransactionInfo != null) {
-      setLastAppliedTermIndex(TermIndex.newTermIndex(
-          omTransactionInfo.getTerm(),
-          omTransactionInfo.getTransactionIndex()));
-      snapshotInfo.updateTermIndex(omTransactionInfo.getTerm(),
-          omTransactionInfo.getTransactionIndex());
+    if (transactionInfo != null) {
+      setLastAppliedTermIndex(TermIndex.valueOf(
+          transactionInfo.getTerm(),
+          transactionInfo.getTransactionIndex()));
+      snapshotInfo.updateTermIndex(transactionInfo.getTerm(),
+          transactionInfo.getTransactionIndex());
     }
     LOG.info("LastAppliedIndex is set from TransactionInfo from OM DB as {}",
         getLastAppliedTermIndex());

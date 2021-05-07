@@ -49,6 +49,7 @@ import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.ozone.OmUtils;
 import org.apache.hadoop.ozone.OzoneConfigKeys;
 import org.apache.hadoop.ozone.OzoneConsts;
+import org.apache.hadoop.ozone.ha.ConfUtils;
 import org.apache.hadoop.ozone.om.exceptions.OMLeaderNotReadyException;
 import org.apache.hadoop.ozone.om.exceptions.OMNotLeaderException;
 import org.apache.hadoop.ozone.om.protocolPB.OzoneManagerProtocolClientSideTranslatorPB;
@@ -129,7 +130,7 @@ public class OMFailoverProxyProvider implements
 
       for (String nodeId : OmUtils.emptyAsSingletonNull(omNodeIds)) {
 
-        String rpcAddrKey = OmUtils.addKeySuffixes(OZONE_OM_ADDRESS_KEY,
+        String rpcAddrKey = ConfUtils.addKeySuffixes(OZONE_OM_ADDRESS_KEY,
             serviceId, nodeId);
         String rpcAddrStr = OmUtils.getOmRpcAddress(config, rpcAddrKey);
         if (rpcAddrStr == null) {
@@ -143,9 +144,9 @@ public class OMFailoverProxyProvider implements
 
 
           // For a non-HA OM setup, nodeId might be null. If so, we assign it
-          // a dummy value
+          // the default value
           if (nodeId == null) {
-            nodeId = OzoneConsts.OM_NODE_ID_DUMMY;
+            nodeId = OzoneConsts.OM_DEFAULT_NODE_ID;
           }
           // ProxyInfo will be set during first time call to server.
           omProxies.put(nodeId, null);

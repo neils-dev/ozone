@@ -87,7 +87,7 @@ public class HddsDispatcher implements ContainerDispatcher, Auditor {
   private final ProtocolMessageMetrics<ProtocolMessageEnum> protocolMetrics;
   private OzoneProtocolMessageDispatcher<ContainerCommandRequestProto,
       ContainerCommandResponseProto, ProtocolMessageEnum> dispatcher;
-  private String scmID;
+  private String clusterId;
   private ContainerMetrics metrics;
   private final TokenVerifier tokenVerifier;
   private final boolean isBlockTokenEnabled;
@@ -193,7 +193,7 @@ public class HddsDispatcher implements ContainerDispatcher, Auditor {
 
     ContainerType containerType;
     ContainerCommandResponseProto responseProto = null;
-    long startTime = System.nanoTime();
+    long startTime = System.currentTimeMillis();
     Type cmdType = msg.getCmdType();
     long containerID = msg.getContainerID();
     metrics.incContainerOpsMetrics(cmdType);
@@ -308,7 +308,8 @@ public class HddsDispatcher implements ContainerDispatcher, Auditor {
     }
     responseProto = handler.handle(msg, container, dispatcherContext);
     if (responseProto != null) {
-      metrics.incContainerOpsLatencies(cmdType, System.nanoTime() - startTime);
+      metrics.incContainerOpsLatencies(cmdType,
+          System.currentTimeMillis() - startTime);
 
       // If the request is of Write Type and the container operation
       // is unsuccessful, it implies the applyTransaction on the container
@@ -550,12 +551,12 @@ public class HddsDispatcher implements ContainerDispatcher, Auditor {
   }
 
   @Override
-  public void setScmId(String scmId) {
-    Preconditions.checkNotNull(scmId, "scmId Cannot be null");
-    if (this.scmID == null) {
-      this.scmID = scmId;
+  public void setClusterId(String clusterId) {
+    Preconditions.checkNotNull(clusterId, "clusterId Cannot be null");
+    if (this.clusterId == null) {
+      this.clusterId = clusterId;
       for (Map.Entry<ContainerType, Handler> handlerMap : handlers.entrySet()) {
-        handlerMap.getValue().setScmID(scmID);
+        handlerMap.getValue().setClusterID(clusterId);
       }
     }
   }

@@ -43,10 +43,12 @@ import org.apache.hadoop.ozone.container.common.statemachine.commandhandler.Crea
 import org.apache.hadoop.ozone.container.common.statemachine.commandhandler.DeleteBlocksCommandHandler;
 import org.apache.hadoop.ozone.container.common.statemachine.commandhandler.DeleteContainerCommandHandler;
 import org.apache.hadoop.ozone.container.common.statemachine.commandhandler.ReplicateContainerCommandHandler;
+import org.apache.hadoop.ozone.container.common.statemachine.commandhandler.SetNodeOperationalStateCommandHandler;
 import org.apache.hadoop.ozone.container.keyvalue.TarContainerPacker;
 import org.apache.hadoop.ozone.container.ozoneimpl.OzoneContainer;
 import org.apache.hadoop.ozone.container.replication.ContainerReplicator;
 import org.apache.hadoop.ozone.container.replication.DownloadAndImportReplicator;
+import org.apache.hadoop.ozone.container.replication.MeasuredReplicator;
 import org.apache.hadoop.ozone.container.replication.ReplicationSupervisor;
 import org.apache.hadoop.ozone.container.replication.SimpleContainerDownloader;
 import org.apache.hadoop.ozone.protocol.commands.SCMCommand;
@@ -55,6 +57,7 @@ import org.apache.hadoop.util.Time;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.ratis.util.ExitUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,6 +90,7 @@ public class DatanodeStateMachine implements Closeable {
    * constructor in a non-thread-safe way - see HDDS-3116.
    */
   private final ReadWriteLock constructionLock = new ReentrantReadWriteLock();
+  private final MeasuredReplicator replicatorMetrics;
 
   /**
    * Constructs a a datanode state machine.
@@ -126,13 +130,14 @@ public class DatanodeStateMachine implements Closeable {
     ContainerReplicator replicator =
         new DownloadAndImportReplicator(container.getContainerSet(),
             container.getController(),
-            new SimpleContainerDownloader(conf,
-                dnCertClient != null ? dnCertClient.getCACertificate() : null),
+            new SimpleContainerDownloader(conf, dnCertClient),
             new TarContainerPacker());
 
+    replicatorMetrics = new MeasuredReplicator(replicator);
+
     supervisor =
-        new ReplicationSupervisor(container.getContainerSet(), replicator,
-            dnConf.getReplicationMaxStreams());
+        new ReplicationSupervisor(container.getContainerSet(),
+            replicatorMetrics, dnConf.getReplicationMaxStreams());
 
     // When we add new handlers just adding a new handler here should do the
     // trick.
@@ -145,6 +150,7 @@ public class DatanodeStateMachine implements Closeable {
             dnConf.getContainerDeleteThreads()))
         .addHandler(new ClosePipelineCommandHandler())
         .addHandler(new CreatePipelineCommandHandler(conf))
+        .addHandler(new SetNodeOperationalStateCommandHandler(conf))
         .setConnectionManager(connectionManager)
         .setContainer(container)
         .setContext(context)
@@ -166,7 +172,7 @@ public class DatanodeStateMachine implements Closeable {
     int totalServerCount = reconServerCount;
 
     try {
-      totalServerCount += HddsUtils.getSCMAddresses(conf).size();
+      totalServerCount += HddsUtils.getSCMAddressForDatanodes(conf).size();
     } catch (Exception e) {
       LOG.error("Fail to get scm addresses", e);
     }
@@ -410,6 +416,11 @@ public class DatanodeStateMachine implements Closeable {
     stateMachineThread =  new ThreadFactoryBuilder()
         .setDaemon(true)
         .setNameFormat("Datanode State Machine Thread - %d")
+        .setUncaughtExceptionHandler((Thread t, Throwable ex) -> {
+          String message = "Terminate Datanode, encounter uncaught exception"
+              + " in Datanode State Machine Thread";
+          ExitUtils.terminate(1, message, ex, LOG);
+        })
         .build().newThread(startStateMachineTask);
     stateMachineThread.start();
   }
@@ -445,6 +456,11 @@ public class DatanodeStateMachine implements Closeable {
    */
   public synchronized void stopDaemon() {
     try {
+      try {
+        replicatorMetrics.close();
+      } catch (Exception e) {
+        LOG.error("Couldn't stop replicator metrics", e);
+      }
       supervisor.stop();
       context.setShutdownGracefully();
       context.setState(DatanodeStates.SHUTDOWN);

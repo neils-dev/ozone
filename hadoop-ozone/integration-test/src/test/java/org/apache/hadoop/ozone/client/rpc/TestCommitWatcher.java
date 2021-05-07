@@ -30,8 +30,10 @@ import org.apache.hadoop.hdds.client.BlockID;
 import org.apache.hadoop.hdds.conf.DatanodeRatisServerConfig;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos;
+import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.ChecksumType;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.ratis.conf.RatisClientConfig;
+import org.apache.hadoop.hdds.scm.OzoneClientConfig;
 import org.apache.hadoop.hdds.scm.ScmConfigKeys;
 import org.apache.hadoop.hdds.scm.XceiverClientManager;
 import org.apache.hadoop.hdds.scm.XceiverClientRatis;
@@ -74,19 +76,19 @@ public class TestCommitWatcher {
     * Set a timeout for each test.
     */
   @Rule
-  public Timeout timeout = new Timeout(300000);
-  private static MiniOzoneCluster cluster;
-  private static OzoneConfiguration conf = new OzoneConfiguration();
-  private static OzoneClient client;
-  private static ObjectStore objectStore;
-  private static int chunkSize;
-  private static long flushSize;
-  private static long maxFlushSize;
-  private static long blockSize;
-  private static String volumeName;
-  private static String bucketName;
-  private static String keyString;
-  private static StorageContainerLocationProtocolClientSideTranslatorPB
+  public Timeout timeout = Timeout.seconds(300);
+  private MiniOzoneCluster cluster;
+  private OzoneConfiguration conf = new OzoneConfiguration();
+  private OzoneClient client;
+  private ObjectStore objectStore;
+  private int chunkSize;
+  private long flushSize;
+  private long maxFlushSize;
+  private long blockSize;
+  private String volumeName;
+  private String bucketName;
+  private String keyString;
+  private StorageContainerLocationProtocolClientSideTranslatorPB
       storageContainerLocationClient;
 
   /**
@@ -99,7 +101,7 @@ public class TestCommitWatcher {
   @Before
   public void init() throws Exception {
     chunkSize = (int)(1 * OzoneConsts.MB);
-    flushSize = 2 * chunkSize;
+    flushSize = (long) 2 * chunkSize;
     maxFlushSize = 2 * flushSize;
     blockSize = 2 * maxFlushSize;
     // Make sure the pipeline does not get destroyed quickly
@@ -125,7 +127,10 @@ public class TestCommitWatcher {
     ratisClientConfig.setWatchRequestTimeout(Duration.ofSeconds(10));
     conf.setFromObject(ratisClientConfig);
 
-    conf.set(OzoneConfigKeys.OZONE_CLIENT_CHECKSUM_TYPE, "NONE");
+    OzoneClientConfig clientConfig = new OzoneClientConfig();
+    clientConfig.setChecksumType(ChecksumType.NONE);
+    conf.setFromObject(clientConfig);
+
     conf.setQuietMode(false);
     conf.setStorageSize(OzoneConfigKeys.OZONE_SCM_BLOCK_SIZE, 4,
         StorageUnit.MB);
@@ -212,16 +217,14 @@ public class TestCommitWatcher {
     CompletableFuture<ContainerProtos.ContainerCommandResponseProto> future2 =
         futures.get(1);
     future1.get();
-    Assert.assertNotNull(watcher.getFutureMap().get(new Long(chunkSize)));
+    Assert.assertNotNull(watcher.getFutureMap().get((long) chunkSize));
     Assert.assertTrue(
-        watcher.getFutureMap().get(new Long(chunkSize)).equals(future1));
+        watcher.getFutureMap().get((long) chunkSize).equals(future1));
     // wait on 2nd putBlock to complete
     future2.get();
-    Assert.assertNotNull(watcher.getFutureMap().get(
-            new Long(2 * chunkSize)));
+    Assert.assertNotNull(watcher.getFutureMap().get((long) 2 * chunkSize));
     Assert.assertTrue(
-            watcher.getFutureMap().get(new Long(2 * chunkSize)).
-                    equals(future2));
+            watcher.getFutureMap().get((long) 2 * chunkSize).equals(future2));
     Assert.assertTrue(watcher.
             getCommitIndex2flushedDataMap().size() == 2);
     watcher.watchOnFirstIndex();
@@ -289,14 +292,14 @@ public class TestCommitWatcher {
     CompletableFuture<ContainerProtos.ContainerCommandResponseProto> future2 =
         futures.get(1);
     future1.get();
-    Assert.assertNotNull(watcher.getFutureMap().get(new Long(chunkSize)));
+    Assert.assertNotNull(watcher.getFutureMap().get((long) chunkSize));
     Assert.assertTrue(
-        watcher.getFutureMap().get(new Long(chunkSize)).equals(future1));
+        watcher.getFutureMap().get((long) chunkSize).equals(future1));
     // wait on 2nd putBlock to complete
     future2.get();
-    Assert.assertNotNull(watcher.getFutureMap().get(new Long(2 * chunkSize)));
+    Assert.assertNotNull(watcher.getFutureMap().get((long) 2 * chunkSize));
     Assert.assertTrue(
-        watcher.getFutureMap().get(new Long(2 * chunkSize)).equals(future2));
+        watcher.getFutureMap().get((long) 2 * chunkSize).equals(future2));
     Assert.assertTrue(watcher.getCommitIndex2flushedDataMap().size() == 2);
     watcher.watchOnFirstIndex();
     Assert.assertFalse(watcher.getCommitIndex2flushedDataMap()

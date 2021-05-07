@@ -20,7 +20,6 @@ import org.apache.hadoop.hdds.conf.ConfigurationSource;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.hdds.protocol.DatanodeDetails;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
-import org.apache.hadoop.hdds.protocol.proto.HddsProtos.NodeState;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.LifeCycleState;
 import org.apache.hadoop.hdds.protocol.proto
     .StorageContainerDatanodeProtocolProtos.ContainerReportsProto;
@@ -28,10 +27,12 @@ import org.apache.hadoop.hdds.protocol.proto
     .StorageContainerDatanodeProtocolProtos.ContainerReplicaProto;
 import org.apache.hadoop.hdds.scm.exceptions.SCMException;
 import org.apache.hadoop.hdds.scm.node.NodeManager;
+import org.apache.hadoop.hdds.scm.node.NodeStatus;
 import org.apache.hadoop.hdds.scm.node.states.NodeNotFoundException;
 import org.apache.hadoop.hdds.scm.server
     .SCMDatanodeHeartbeatDispatcher.ContainerReportFromDatanode;
 import org.apache.hadoop.hdds.server.events.EventPublisher;
+import org.apache.hadoop.ozone.common.statemachine.InvalidStateTransitionException;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -39,7 +40,6 @@ import org.junit.Test;
 import org.mockito.Mockito;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -55,15 +55,15 @@ import static org.apache.hadoop.hdds.scm.TestUtils.getContainer;
 public class TestContainerReportHandler {
 
   private NodeManager nodeManager;
-  private ContainerManager containerManager;
+  private ContainerManagerV2 containerManager;
   private ContainerStateManager containerStateManager;
   private EventPublisher publisher;
 
   @Before
-  public void setup() throws IOException {
+  public void setup() throws IOException, InvalidStateTransitionException {
     final ConfigurationSource conf = new OzoneConfiguration();
     this.nodeManager = new MockNodeManager(true, 10);
-    this.containerManager = Mockito.mock(ContainerManager.class);
+    this.containerManager = Mockito.mock(ContainerManagerV2.class);
     this.containerStateManager = new ContainerStateManager(conf);
     this.publisher = Mockito.mock(EventPublisher.class);
 
@@ -116,7 +116,7 @@ public class TestContainerReportHandler {
     final ContainerReportHandler reportHandler = new ContainerReportHandler(
         nodeManager, containerManager);
     final Iterator<DatanodeDetails> nodeIterator = nodeManager.getNodes(
-        NodeState.HEALTHY).iterator();
+        NodeStatus.inServiceHealthy()).iterator();
     final DatanodeDetails datanodeOne = nodeIterator.next();
     final DatanodeDetails datanodeTwo = nodeIterator.next();
     final DatanodeDetails datanodeThree = nodeIterator.next();
@@ -185,7 +185,7 @@ public class TestContainerReportHandler {
         nodeManager, containerManager);
 
     final Iterator<DatanodeDetails> nodeIterator = nodeManager.getNodes(
-        NodeState.HEALTHY).iterator();
+        NodeStatus.inServiceHealthy()).iterator();
     final DatanodeDetails datanodeOne = nodeIterator.next();
     final DatanodeDetails datanodeTwo = nodeIterator.next();
     final DatanodeDetails datanodeThree = nodeIterator.next();
@@ -264,7 +264,7 @@ public class TestContainerReportHandler {
         nodeManager, containerManager);
 
     final Iterator<DatanodeDetails> nodeIterator = nodeManager.getNodes(
-        NodeState.HEALTHY).iterator();
+        NodeStatus.inServiceHealthy()).iterator();
     final DatanodeDetails datanodeOne = nodeIterator.next();
     final DatanodeDetails datanodeTwo = nodeIterator.next();
     final DatanodeDetails datanodeThree = nodeIterator.next();
@@ -343,7 +343,7 @@ public class TestContainerReportHandler {
         nodeManager, containerManager);
 
     final Iterator<DatanodeDetails> nodeIterator = nodeManager.getNodes(
-        NodeState.HEALTHY).iterator();
+        NodeStatus.inServiceHealthy()).iterator();
     final DatanodeDetails datanodeOne = nodeIterator.next();
     final DatanodeDetails datanodeTwo = nodeIterator.next();
     final DatanodeDetails datanodeThree = nodeIterator.next();
@@ -420,7 +420,7 @@ public class TestContainerReportHandler {
     final ContainerReportHandler reportHandler = new ContainerReportHandler(
         nodeManager, containerManager);
     final Iterator<DatanodeDetails> nodeIterator = nodeManager.getNodes(
-        NodeState.HEALTHY).iterator();
+        NodeStatus.inServiceHealthy()).iterator();
 
     final DatanodeDetails datanodeOne = nodeIterator.next();
     final DatanodeDetails datanodeTwo = nodeIterator.next();
@@ -491,7 +491,7 @@ public class TestContainerReportHandler {
     final ContainerReportHandler reportHandler = new ContainerReportHandler(
         nodeManager, containerManager);
     final Iterator<DatanodeDetails> nodeIterator = nodeManager.getNodes(
-        NodeState.HEALTHY).iterator();
+        NodeStatus.inServiceHealthy()).iterator();
 
     final DatanodeDetails datanodeOne = nodeIterator.next();
     final DatanodeDetails datanodeTwo = nodeIterator.next();
@@ -500,9 +500,6 @@ public class TestContainerReportHandler {
     final ContainerReplicaProto.State replicaState
         = ContainerReplicaProto.State.OPEN;
     final ContainerInfo containerOne = getContainer(LifeCycleState.OPEN);
-
-    final Set<ContainerID> containerIDSet = new HashSet<>();
-    containerIDSet.add(containerOne.containerID());
 
     containerStateManager.loadContainer(containerOne);
     // Container loaded, no replicas reported from DNs. Expect zeros for
@@ -562,7 +559,7 @@ public class TestContainerReportHandler {
     final ContainerReportHandler reportHandler = new ContainerReportHandler(
         nodeManager, containerManager);
     final Iterator<DatanodeDetails> nodeIterator = nodeManager.getNodes(
-        NodeState.HEALTHY).iterator();
+        NodeStatus.inServiceHealthy()).iterator();
 
     final DatanodeDetails datanodeOne = nodeIterator.next();
     final DatanodeDetails datanodeTwo = nodeIterator.next();
@@ -571,9 +568,6 @@ public class TestContainerReportHandler {
     final ContainerReplicaProto.State replicaState
         = ContainerReplicaProto.State.CLOSED;
     final ContainerInfo containerOne = getContainer(LifeCycleState.CLOSED);
-
-    final Set<ContainerID> containerIDSet = new HashSet<>();
-    containerIDSet.add(containerOne.containerID());
 
     containerStateManager.loadContainer(containerOne);
     // Container loaded, no replicas reported from DNs. Expect zeros for
@@ -635,7 +629,7 @@ public class TestContainerReportHandler {
         nodeManager, containerManager);
 
     final Iterator<DatanodeDetails> nodeIterator = nodeManager.getNodes(
-        NodeState.HEALTHY).iterator();
+        NodeStatus.inServiceHealthy()).iterator();
     final DatanodeDetails datanodeOne = nodeIterator.next();
     final ContainerInfo containerOne = getContainer(LifeCycleState.DELETED);
 

@@ -38,9 +38,13 @@ import java.util.stream.Collectors;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdds.annotation.InterfaceAudience;
+import org.apache.hadoop.hdds.scm.ScmConfigKeys;
 import org.apache.hadoop.hdds.utils.LegacyHadoopConfigurationSource;
 
 import com.google.common.base.Preconditions;
+import org.apache.ratis.server.RaftServerConfigKeys;
+
+import static org.apache.hadoop.hdds.ratis.RatisHelper.HDDS_DATANODE_RATIS_PREFIX_KEY;
 
 /**
  * Configuration for ozone.
@@ -49,6 +53,8 @@ import com.google.common.base.Preconditions;
 public class OzoneConfiguration extends Configuration
     implements MutableConfigurationSource {
   static {
+    addDeprecatedKeys();
+
     activate();
   }
 
@@ -121,7 +127,7 @@ public class OzoneConfiguration extends Configuration
     }
     // Adding core-site here because properties from core-site are
     // distributed to executors by spark driver. Ozone properties which are
-    // added to core-site, will be overriden by properties from adding Resource
+    // added to core-site, will be overridden by properties from adding Resource
     // ozone-default.xml. So, adding core-site again will help to resolve
     // this override issue.
     addResource("core-site.xml");
@@ -286,5 +292,16 @@ public class OzoneConfiguration extends Configuration
       }
     }
     return configMap;
+  }
+
+  private static void addDeprecatedKeys(){
+    Configuration.addDeprecations(new DeprecationDelta[]{
+        new DeprecationDelta("ozone.datanode.pipeline.limit",
+            ScmConfigKeys.OZONE_DATANODE_PIPELINE_LIMIT),
+        new DeprecationDelta(HDDS_DATANODE_RATIS_PREFIX_KEY + "."
+           + RaftServerConfigKeys.PREFIX + "." + "rpcslowness.timeout",
+           HDDS_DATANODE_RATIS_PREFIX_KEY + "."
+           + RaftServerConfigKeys.PREFIX + "." + "rpc.slowness.timeout")
+    });
   }
 }

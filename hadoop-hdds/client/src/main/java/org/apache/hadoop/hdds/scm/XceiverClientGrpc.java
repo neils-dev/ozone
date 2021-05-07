@@ -82,7 +82,7 @@ public class XceiverClientGrpc extends XceiverClientSpi {
   private final long timeout;
   private SecurityConfig secConfig;
   private final boolean topologyAwareRead;
-  private X509Certificate caCert;
+  private List<X509Certificate> caCerts;
   // Cache the DN which returned the GetBlock command so that the ReadChunk
   // command can be sent to the same DN.
   private Map<DatanodeBlockID, DatanodeDetails> getBlockDNcache;
@@ -93,10 +93,10 @@ public class XceiverClientGrpc extends XceiverClientSpi {
    *
    * @param pipeline - Pipeline that defines the machines.
    * @param config   -- Ozone Config
-   * @param caCert   - SCM ca certificate.
+   * @param caCerts   - SCM ca certificate.
    */
   public XceiverClientGrpc(Pipeline pipeline, ConfigurationSource config,
-      X509Certificate caCert) {
+      List<X509Certificate> caCerts) {
     super();
     Preconditions.checkNotNull(pipeline);
     Preconditions.checkNotNull(config);
@@ -114,7 +114,7 @@ public class XceiverClientGrpc extends XceiverClientSpi {
     this.topologyAwareRead = config.getBoolean(
         OzoneConfigKeys.OZONE_NETWORK_TOPOLOGY_AWARE_READ_KEY,
         OzoneConfigKeys.OZONE_NETWORK_TOPOLOGY_AWARE_READ_DEFAULT);
-    this.caCert = caCert;
+    this.caCerts = caCerts;
     this.getBlockDNcache = new ConcurrentHashMap<>();
   }
 
@@ -179,8 +179,8 @@ public class XceiverClientGrpc extends XceiverClientSpi {
             .intercept(new GrpcClientInterceptor());
     if (secConfig.isGrpcTlsEnabled()) {
       SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient();
-      if (caCert != null) {
-        sslContextBuilder.trustManager(caCert);
+      if (caCerts != null) {
+        sslContextBuilder.trustManager(caCerts);
       }
       if (secConfig.useTestCert()) {
         channelBuilder.overrideAuthority("localhost");
@@ -382,6 +382,8 @@ public class XceiverClientGrpc extends XceiverClientSpi {
       } catch (IOException e) {
         ioException = e;
         responseProto = null;
+        LOG.debug("Failed to execute command {} on datanode {}",
+            request, dn, e);
       } catch (ExecutionException e) {
         LOG.debug("Failed to execute command {} on datanode {}",
             request, dn, e);
@@ -468,7 +470,7 @@ public class XceiverClientGrpc extends XceiverClientSpi {
     final CompletableFuture<ContainerCommandResponseProto> replyFuture =
         new CompletableFuture<>();
     semaphore.acquire();
-    long requestTime = System.nanoTime();
+    long requestTime = System.currentTimeMillis();
     metrics.incrPendingContainerOpsMetrics(request.getCmdType());
     // create a new grpc stream for each non-async call.
 
@@ -482,7 +484,7 @@ public class XceiverClientGrpc extends XceiverClientSpi {
               public void onNext(ContainerCommandResponseProto value) {
                 replyFuture.complete(value);
                 metrics.decrPendingContainerOpsMetrics(request.getCmdType());
-                long cost = System.nanoTime() - requestTime;
+                long cost = System.currentTimeMillis() - requestTime;
                 metrics.addContainerOpsLatency(request.getCmdType(),
                     cost);
                 if (LOG.isDebugEnabled()) {
@@ -497,9 +499,9 @@ public class XceiverClientGrpc extends XceiverClientSpi {
               public void onError(Throwable t) {
                 replyFuture.completeExceptionally(t);
                 metrics.decrPendingContainerOpsMetrics(request.getCmdType());
-                long cost = System.nanoTime() - requestTime;
+                long cost = System.currentTimeMillis() - requestTime;
                 metrics.addContainerOpsLatency(request.getCmdType(),
-                    System.nanoTime() - requestTime);
+                    System.currentTimeMillis() - requestTime);
                 if (LOG.isDebugEnabled()) {
                   LOG.debug("Executed command {} on datanode {}, cost = {}, "
                           + "cmdType = {}", request, dn,
@@ -559,6 +561,7 @@ public class XceiverClientGrpc extends XceiverClientSpi {
     return null;
   }
 
+  @Override
   public long getReplicatedMinCommitIndex() {
     return 0;
   }
@@ -570,5 +573,10 @@ public class XceiverClientGrpc extends XceiverClientSpi {
   @Override
   public HddsProtos.ReplicationType getPipelineType() {
     return HddsProtos.ReplicationType.STAND_ALONE;
+  }
+
+  @VisibleForTesting
+  public static Logger getLogger() {
+    return LOG;
   }
 }

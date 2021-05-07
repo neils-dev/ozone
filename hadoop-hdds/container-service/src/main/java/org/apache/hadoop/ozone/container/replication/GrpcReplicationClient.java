@@ -24,26 +24,23 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.cert.X509Certificate;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos
-    .CopyContainerRequestProto;
-import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos
-    .CopyContainerResponseProto;
-import org.apache.hadoop.hdds.protocol.datanode.proto
-    .IntraDatanodeProtocolServiceGrpc;
-import org.apache.hadoop.hdds.protocol.datanode.proto
-    .IntraDatanodeProtocolServiceGrpc.IntraDatanodeProtocolServiceStub;
+import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.CopyContainerRequestProto;
+import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.CopyContainerResponseProto;
+import org.apache.hadoop.hdds.protocol.datanode.proto.IntraDatanodeProtocolServiceGrpc;
+import org.apache.hadoop.hdds.protocol.datanode.proto.IntraDatanodeProtocolServiceGrpc.IntraDatanodeProtocolServiceStub;
+import org.apache.hadoop.hdds.security.x509.SecurityConfig;
+import org.apache.hadoop.hdds.security.x509.certificate.client.CertificateClient;
+import org.apache.hadoop.ozone.OzoneConsts;
 
 import com.google.common.base.Preconditions;
-import org.apache.hadoop.hdds.security.x509.SecurityConfig;
-import org.apache.hadoop.ozone.OzoneConsts;
 import org.apache.ratis.thirdparty.io.grpc.ManagedChannel;
 import org.apache.ratis.thirdparty.io.grpc.netty.GrpcSslContexts;
 import org.apache.ratis.thirdparty.io.grpc.netty.NettyChannelBuilder;
 import org.apache.ratis.thirdparty.io.grpc.stub.StreamObserver;
+import org.apache.ratis.thirdparty.io.netty.handler.ssl.ClientAuth;
 import org.apache.ratis.thirdparty.io.netty.handler.ssl.SslContextBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +48,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Client to read container data from gRPC.
  */
-public class GrpcReplicationClient {
+public class GrpcReplicationClient implements AutoCloseable{
 
   private static final Logger LOG =
       LoggerFactory.getLogger(GrpcReplicationClient.class);
@@ -62,19 +59,25 @@ public class GrpcReplicationClient {
 
   private final Path workingDirectory;
 
-  public GrpcReplicationClient(String host, int port, Path workingDir,
-      SecurityConfig secConfig, X509Certificate caCert) throws IOException {
+  public GrpcReplicationClient(
+      String host, int port, Path workingDir,
+      SecurityConfig secConfig, CertificateClient certClient
+  ) throws IOException {
     NettyChannelBuilder channelBuilder =
         NettyChannelBuilder.forAddress(host, port)
             .usePlaintext()
             .maxInboundMessageSize(OzoneConsts.OZONE_SCM_CHUNK_MAX_SIZE);
 
-    if (secConfig.isGrpcTlsEnabled()) {
+    if (secConfig.isSecurityEnabled()) {
       channelBuilder.useTransportSecurity();
 
       SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient();
-      if (caCert != null) {
-        sslContextBuilder.trustManager(caCert);
+      if (certClient != null) {
+        sslContextBuilder
+            .trustManager(certClient.getCACertificate())
+            .clientAuth(ClientAuth.REQUIRE)
+            .keyManager(certClient.getPrivateKey(),
+                certClient.getCertificate());
       }
       if (secConfig.useTestCert()) {
         channelBuilder.overrideAuthority("localhost");
@@ -116,6 +119,11 @@ public class GrpcReplicationClient {
     } catch (Exception e) {
       LOG.error("failed to shutdown replication channel", e);
     }
+  }
+
+  @Override
+  public void close() throws Exception {
+    shutdown();
   }
 
   /**

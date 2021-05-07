@@ -1,6 +1,5 @@
----
-title: Persistent OM connection for S3 gateway
-summary: Use per-request authentication and persistent connections between S3g and OM
+title: Proposed persistent OM connection for S3 gateway
+summary: Proposal to use per-request authentication and persistent connections between S3g and OM
 date: 2020-11-09
 jira: HDDS-4440
 status: accepted
@@ -230,7 +229,5 @@ To make it easier to understand the implementation of this approach, let's compa
 # Possible alternatives
 
 * It's possible to use pure Hadoop RPC client instead of Ozone Client which would make the client connection slightly cheaper (service discovery call is not required) but it's still require to create new connections for each requests (and downloading data without OzoneClient may have own challenges).
-* CDI error handling can be improved with using other dependency injection (eg. Guice, which is already used by Recon) or some additional wrappers and manual connection creation. But it wouldn't solve the perfomance problem.
-
-
+* CDI error handling can be improved with using other dependency injection (eg. Guice, which is already used by Recon) or some additional wrappers and manual connection creation. But it wouldn't solve the performance problem.
 

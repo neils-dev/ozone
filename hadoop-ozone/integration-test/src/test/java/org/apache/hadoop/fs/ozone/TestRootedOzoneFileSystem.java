@@ -24,13 +24,16 @@ import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.InvalidPathException;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathIsNotEmptyDirectoryException;
 import org.apache.hadoop.fs.Trash;
+import org.apache.hadoop.fs.TrashPolicy;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.ozone.MiniOzoneCluster;
+import org.apache.hadoop.ozone.OFSPath;
 import org.apache.hadoop.ozone.OzoneAcl;
 import org.apache.hadoop.ozone.OzoneConsts;
 import org.apache.hadoop.ozone.TestDataUtil;
@@ -41,12 +44,15 @@ import org.apache.hadoop.ozone.client.OzoneVolume;
 import org.apache.hadoop.ozone.client.VolumeArgs;
 import org.apache.hadoop.ozone.client.protocol.ClientProtocol;
 import org.apache.hadoop.ozone.om.OMConfigKeys;
+import org.apache.hadoop.ozone.om.OMMetrics;
+import org.apache.hadoop.ozone.om.TrashPolicyOzone;
 import org.apache.hadoop.ozone.om.exceptions.OMException;
 import org.apache.hadoop.ozone.security.acl.IAccessAuthorizer.ACLIdentityType;
 import org.apache.hadoop.ozone.security.acl.IAccessAuthorizer.ACLType;
 import org.apache.hadoop.ozone.security.acl.OzoneAclConfig;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.test.GenericTestUtils;
+import org.apache.hadoop.test.LambdaTestUtils;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -70,6 +76,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
+import static org.apache.hadoop.fs.FileSystem.LOG;
 import static org.apache.hadoop.fs.FileSystem.TRASH_PREFIX;
 import static org.apache.hadoop.fs.ozone.Constants.LISTING_PAGE_SIZE;
 import static org.apache.hadoop.ozone.OzoneAcl.AclScope.ACCESS;
@@ -90,17 +97,24 @@ public class TestRootedOzoneFileSystem {
 
   @Parameterized.Parameters
   public static Collection<Object[]> data() {
-    return Arrays.asList(new Object[]{true}, new Object[]{false});
+    return Arrays.asList(
+        new Object[]{true, true},
+        new Object[]{true, false},
+        new Object[]{false, true},
+        new Object[]{false, false});
   }
 
-  public TestRootedOzoneFileSystem(boolean setDefaultFs) {
+  public TestRootedOzoneFileSystem(boolean setDefaultFs,
+      boolean enableOMRatis) {
     enabledFileSystemPaths = setDefaultFs;
+    omRatisEnabled = enableOMRatis;
   }
 
   @Rule
-  public Timeout globalTimeout = new Timeout(300_000);
+  public Timeout globalTimeout = Timeout.seconds(300);;
 
   private static boolean enabledFileSystemPaths;
+  private static boolean omRatisEnabled;
 
   private static OzoneConfiguration conf;
   private static MiniOzoneCluster cluster = null;
@@ -121,6 +135,7 @@ public class TestRootedOzoneFileSystem {
   public static void init() throws Exception {
     conf = new OzoneConfiguration();
     conf.setInt(FS_TRASH_INTERVAL_KEY, 1);
+    conf.setBoolean(OMConfigKeys.OZONE_OM_RATIS_ENABLE_KEY, omRatisEnabled);
     conf.setBoolean(OMConfigKeys.OZONE_OM_ENABLE_FILESYSTEM_PATHS,
         enabledFileSystemPaths);
     cluster = MiniOzoneCluster.newBuilder(conf)
@@ -145,6 +160,8 @@ public class TestRootedOzoneFileSystem {
     conf.setInt(OZONE_FS_ITERATE_BATCH_SIZE, 5);
     // fs.ofs.impl would be loaded from META-INF, no need to manually set it
     fs = FileSystem.get(conf);
+    conf.setClass("fs.trash.classname", TrashPolicyOzone.class,
+        TrashPolicy.class);
     trash = new Trash(conf);
     ofs = (RootedOzoneFileSystem) fs;
     adapter = (BasicRootedOzoneClientAdapterImpl) ofs.getAdapter();
@@ -156,6 +173,10 @@ public class TestRootedOzoneFileSystem {
       cluster.shutdown();
     }
     IOUtils.closeQuietly(fs);
+  }
+
+  private OMMetrics getOMMetrics() {
+    return cluster.getOzoneManager().getMetrics();
   }
 
   @Test
@@ -817,13 +838,13 @@ public class TestRootedOzoneFileSystem {
     // Construct VolumeArgs
     VolumeArgs volumeArgs = new VolumeArgs.Builder()
         .setAcls(Collections.singletonList(aclWorldAccess))
-        .setQuotaInCounts(1000)
+        .setQuotaInNamespace(1000)
         .setQuotaInBytes(Long.MAX_VALUE).build();
     // Sanity check
     Assert.assertNull(volumeArgs.getOwner());
     Assert.assertNull(volumeArgs.getAdmin());
     Assert.assertEquals(Long.MAX_VALUE, volumeArgs.getQuotaInBytes());
-    Assert.assertEquals(1000, volumeArgs.getQuotaInCounts());
+    Assert.assertEquals(1000, volumeArgs.getQuotaInNamespace());
     Assert.assertEquals(0, volumeArgs.getMetadata().size());
     Assert.assertEquals(1, volumeArgs.getAcls().size());
     // Create volume "tmp" with world access. allow non-admin to create buckets
@@ -1102,13 +1123,13 @@ public class TestRootedOzoneFileSystem {
   }
 
   /**
-   * Check that no files are actually moved to trash since it is disabled by
+   * Check that  files are moved to trash since it is enabled by
    * fs.rename(src, dst, options).
    */
   @Test
-  public void testRenameToTrashDisabled() throws IOException {
+  public void testRenameToTrashEnabled() throws IOException {
     // Create a file
-    String testKeyName = "testKey1";
+    String testKeyName = "testKey2";
     Path path = new Path(bucketPath, testKeyName);
     try (FSDataOutputStream stream = fs.create(path)) {
       stream.write(1);
@@ -1122,12 +1143,12 @@ public class TestRootedOzoneFileSystem {
     Path trashRoot = new Path(bucketPath, TRASH_PREFIX);
     Path userTrash = new Path(trashRoot, username);
     Path userTrashCurrent = new Path(userTrash, "Current");
-    Path trashPath = new Path(userTrashCurrent, testKeyName);
-
+    String key = path.toString().substring(1);
+    Path trashPath = new Path(userTrashCurrent, key);
     // Trash Current directory should still have been created.
     Assert.assertTrue(ofs.exists(userTrashCurrent));
-    // Check under trash, the key should be deleted instead
-    Assert.assertFalse(ofs.exists(trashPath));
+    // Check under trash, the key should be present
+    Assert.assertTrue(ofs.exists(trashPath));
 
     // Cleanup
     ofs.delete(trashRoot, true);
@@ -1169,5 +1190,123 @@ public class TestRootedOzoneFileSystem {
     // This will return false.
     Boolean falseResult = fs.delete(parent, true);
     assertFalse(falseResult);
+  }
+
+  /**
+   * 1.Move a Key to Trash
+   * 2.Verify that the key gets deleted by the trash emptier.
+   * 3.Create a second Key in different bucket and verify deletion.
+   * @throws Exception
+   */
+  @Test
+  public void testTrash() throws Exception {
+    String testKeyName = "keyToBeDeleted";
+    Path keyPath1 = new Path(bucketPath, testKeyName);
+    try (FSDataOutputStream stream = fs.create(keyPath1)) {
+      stream.write(1);
+    }
+    // create second bucket and write a key in it.
+    OzoneBucket bucket2 = TestDataUtil.createVolumeAndBucket(cluster);
+    String volumeName2 = bucket2.getVolumeName();
+    Path volumePath2 = new Path(OZONE_URI_DELIMITER, volumeName2);
+    String bucketName2 = bucket2.getName();
+    Path bucketPath2 = new Path(volumePath2, bucketName2);
+    Path keyPath2 = new Path(bucketPath2, testKeyName + "1");
+    try (FSDataOutputStream stream = fs.create(keyPath2)) {
+      stream.write(1);
+    }
+
+    Assert.assertTrue(trash.getConf().getClass(
+        "fs.trash.classname", TrashPolicy.class).
+        isAssignableFrom(TrashPolicyOzone.class));
+
+    long prevNumTrashDeletes = getOMMetrics().getNumTrashDeletes();
+    long prevNumTrashFileDeletes = getOMMetrics().getNumTrashFilesDeletes();
+
+    long prevNumTrashRenames = getOMMetrics().getNumTrashRenames();
+    long prevNumTrashFileRenames = getOMMetrics().getNumTrashFilesRenames();
+
+    // Call moveToTrash. We can't call protected fs.rename() directly
+    trash.moveToTrash(keyPath1);
+    // for key in second bucket
+    trash.moveToTrash(keyPath2);
+
+    // Construct paths for first key
+    String username = UserGroupInformation.getCurrentUser().getShortUserName();
+    Path trashRoot = new Path(bucketPath, TRASH_PREFIX);
+    Path userTrash = new Path(trashRoot, username);
+    Path trashPath = getTrashKeyPath(keyPath1, userTrash);
+
+    // Construct paths for second key in different bucket
+    Path trashRoot2 = new Path(bucketPath2, TRASH_PREFIX);
+    Path userTrash2 = new Path(trashRoot2, username);
+    Path trashPath2 = getTrashKeyPath(keyPath2, userTrash2);
+
+
+    // Wait until the TrashEmptier purges the keys
+    GenericTestUtils.waitFor(()-> {
+      try {
+        return !ofs.exists(trashPath) && !ofs.exists(trashPath2);
+      } catch (IOException e) {
+        LOG.error("Delete from Trash Failed", e);
+        Assert.fail("Delete from Trash Failed");
+        return false;
+      }
+    }, 1000, 180000);
+
+    // This condition should pass after the checkpoint
+    Assert.assertTrue(getOMMetrics()
+        .getNumTrashRenames() > prevNumTrashRenames);
+    Assert.assertTrue(getOMMetrics()
+        .getNumTrashFilesRenames() > prevNumTrashFileRenames);
+
+    // wait for deletion of checkpoint dir
+    GenericTestUtils.waitFor(()-> {
+      try {
+        return ofs.listStatus(userTrash).length==0 &&
+            ofs.listStatus(userTrash2).length==0;
+      } catch (IOException e) {
+        LOG.error("Delete from Trash Failed", e);
+        Assert.fail("Delete from Trash Failed");
+        return false;
+      }
+    }, 1000, 120000);
+
+    // This condition should succeed once the checkpoint directory is deleted
+    GenericTestUtils.waitFor(
+        () -> getOMMetrics().getNumTrashDeletes() > prevNumTrashDeletes
+            && getOMMetrics().getNumTrashFilesDeletes()
+            > prevNumTrashFileDeletes, 100, 180000);
+    // Cleanup
+    ofs.delete(trashRoot, true);
+    ofs.delete(trashRoot2, true);
+
+  }
+
+  private Path getTrashKeyPath(Path keyPath, Path userTrash) {
+    Path userTrashCurrent = new Path(userTrash, "Current");
+    String key = keyPath.toString().substring(1);
+    return new Path(userTrashCurrent, key);
+  }
+
+  @Test
+  public void testCreateWithInvalidPaths() throws Exception {
+    // Test for path with ..
+    Path parent = new Path("../../../../../d1/d2/");
+    Path file1 = new Path(parent, "key1");
+    checkInvalidPath(file1);
+
+    // Test for path with :
+    file1 = new Path("/:/:");
+    checkInvalidPath(file1);
+
+    // Test for path with scheme and authority.
+    file1 = new Path(fs.getUri() + "/:/:");
+    checkInvalidPath(file1);
+  }
+
+  private void checkInvalidPath(Path path) throws Exception {
+    LambdaTestUtils.intercept(InvalidPathException.class, "Invalid path Name",
+        () -> fs.create(path, false));
   }
 }

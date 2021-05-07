@@ -33,10 +33,10 @@ import java.util.stream.Collectors;
 import org.apache.hadoop.hdds.HddsUtils;
 import org.apache.hadoop.hdds.StringUtils;
 import org.apache.hadoop.hdds.utils.RocksDBStoreMBean;
+import org.apache.hadoop.hdds.utils.db.cache.TableCache;
 import org.apache.hadoop.metrics2.util.MBeans;
 
 import com.google.common.base.Preconditions;
-import org.apache.hadoop.hdds.utils.db.cache.TableCacheImpl;
 import org.apache.ratis.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
@@ -49,6 +49,8 @@ import org.rocksdb.TransactionLogIterator;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.hadoop.hdds.utils.HddsServerUtil.toIOException;
 
 /**
  * RocksDB Store that supports creating Tables in DB.
@@ -71,12 +73,13 @@ public class RDBStore implements DBStore {
   @VisibleForTesting
   public RDBStore(File dbFile, DBOptions options,
                   Set<TableConfig> families) throws IOException {
-    this(dbFile, options, new WriteOptions(), families, new CodecRegistry());
+    this(dbFile, options, new WriteOptions(), families, new CodecRegistry(),
+        false);
   }
 
   public RDBStore(File dbFile, DBOptions options,
       WriteOptions writeOptions, Set<TableConfig> families,
-                  CodecRegistry registry)
+                  CodecRegistry registry, boolean readOnly)
       throws IOException {
     Preconditions.checkNotNull(dbFile, "DB file location cannot be null");
     Preconditions.checkNotNull(families);
@@ -108,8 +111,13 @@ public class RDBStore implements DBStore {
         extraCf.forEach(cf -> columnFamilyDescriptors.add(cf.getDescriptor()));
       }
 
-      db = RocksDB.open(dbOptions, dbLocation.getAbsolutePath(),
-          columnFamilyDescriptors, columnFamilyHandles);
+      if (readOnly) {
+        db = RocksDB.openReadOnly(dbOptions, dbLocation.getAbsolutePath(),
+            columnFamilyDescriptors, columnFamilyHandles);
+      } else {
+        db = RocksDB.open(dbOptions, dbLocation.getAbsolutePath(),
+            columnFamilyDescriptors, columnFamilyHandles);
+      }
 
       for (int x = 0; x < columnFamilyHandles.size(); x++) {
         handleTable.put(
@@ -142,7 +150,7 @@ public class RDBStore implements DBStore {
       }
 
       //Initialize checkpoint manager
-      checkPointManager = new RDBCheckpointManager(db, "rdb");
+      checkPointManager = new RDBCheckpointManager(db, dbLocation.getName());
       rdbMetrics = RDBMetrics.create();
 
     } catch (RocksDBException e) {
@@ -181,16 +189,6 @@ public class RDBStore implements DBStore {
           columnFamiliesInDb);
     }
     return columnFamiliesInDb;
-  }
-
-  public static IOException toIOException(String msg, RocksDBException e) {
-    String statusCode = e.getStatus() == null ? "N/A" :
-        e.getStatus().getCodeString();
-    String errMessage = e.getMessage() == null ? "Unknown error" :
-        e.getMessage();
-    String output = msg + "; status : " + statusCode
-        + "; message : " + errMessage;
-    return new IOException(output, e);
   }
 
   @Override
@@ -304,9 +302,9 @@ public class RDBStore implements DBStore {
   @Override
   public <K, V> Table<K, V> getTable(String name,
       Class<K> keyType, Class<V> valueType,
-      TableCacheImpl.CacheCleanupPolicy cleanupPolicy) throws IOException {
+      TableCache.CacheType cacheType) throws IOException {
     return new TypedTable<>(getTable(name), codecRegistry, keyType,
-        valueType, cleanupPolicy);
+        valueType, cacheType);
   }
 
   @Override

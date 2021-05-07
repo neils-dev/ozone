@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.hdds.client.RatisReplicationConfig;
 import org.apache.hadoop.hdds.client.ReplicationFactor;
 import org.apache.hadoop.hdds.client.ReplicationType;
 import org.apache.hadoop.hdds.conf.DatanodeRatisServerConfig;
@@ -46,6 +47,7 @@ import org.apache.hadoop.ozone.container.ozoneimpl.TestOzoneContainer;
 import org.apache.hadoop.ozone.om.helpers.OmKeyLocationInfo;
 import org.apache.hadoop.test.GenericTestUtils;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_COMMAND_STATUS_REPORT_INTERVAL;
 import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_CONTAINER_REPORT_INTERVAL;
 import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_PIPELINE_REPORT_INTERVAL;
@@ -138,9 +140,9 @@ public class TestContainerStateMachineFailureOnRead {
   public void testReadStateMachineFailureClosesPipeline() throws Exception {
     // Stop one follower datanode
     List<Pipeline> pipelines =
-        cluster.getStorageContainerManager().getPipelineManager().getPipelines(
-            HddsProtos.ReplicationType.RATIS,
-            HddsProtos.ReplicationFactor.THREE);
+        cluster.getStorageContainerManager().getPipelineManager()
+            .getPipelines(new RatisReplicationConfig(
+                HddsProtos.ReplicationFactor.THREE));
     Assert.assertEquals(1, pipelines.size());
     Pipeline ratisPipeline = pipelines.iterator().next();
 
@@ -169,7 +171,7 @@ public class TestContainerStateMachineFailureOnRead {
         .createKey("ratis", 1024, ReplicationType.RATIS,
             ReplicationFactor.THREE, new HashMap<>());
     // First write and flush creates a container in the datanode
-    key.write("ratis".getBytes());
+    key.write("ratis".getBytes(UTF_8));
     key.flush();
     
     // get the name of a valid container
