@@ -42,6 +42,7 @@ import org.hamcrest.core.StringContains;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore; // HDDS-4440
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -193,6 +194,7 @@ public class TestOzoneFsHAURLs {
    * Test OM HA URLs with qualified fs.defaultFS.
    * @throws Exception
    */
+  @Ignore // HDDS-4440    
   @Test
   public void testWithQualifiedDefaultFS() throws Exception {
     OzoneConfiguration clientConf = new OzoneConfiguration(conf);
@@ -287,7 +289,7 @@ public class TestOzoneFsHAURLs {
   }
 
   /**
-   * Helper function for testOtherDefaultFS(),
+   * Helper function for testWithDefaultFS(),
    * run fs -ls o3fs:/// against different fs.defaultFS input.
    *
    * @param defaultFS Desired fs.defaultFS to be used in the test
@@ -316,6 +318,7 @@ public class TestOzoneFsHAURLs {
    * Test OM HA URLs with some unqualified fs.defaultFS.
    * @throws Exception
    */
+    @Ignore // HDDS-4440
   @Test
   public void testOtherDefaultFS() throws Exception {
     // Test scenarios where fs.defaultFS isn't a fully qualified o3fs
