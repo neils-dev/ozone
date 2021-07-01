@@ -97,6 +97,7 @@ Setup s3 tests
     ${BUCKET} =        Run Keyword if                            '${BUCKET}' == 'generated'            Create bucket
     ...                ELSE                                      Set Variable    ${BUCKET}
                        Set Suite Variable                        ${BUCKET}
+                       Run Keyword                               Create bucket with name        ${BUCKET}                                              
                        Run Keyword if                            '${BUCKET}' == 'link'                 Setup links for S3 tests
 
 Setup links for S3 tests

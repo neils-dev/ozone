@@ -318,7 +318,7 @@ public class TestOzoneFsHAURLs {
    * Test OM HA URLs with some unqualified fs.defaultFS.
    * @throws Exception
    */
-    @Ignore // HDDS-4440
+  @Ignore // HDDS-4440
   @Test
   public void testOtherDefaultFS() throws Exception {
     // Test scenarios where fs.defaultFS isn't a fully qualified o3fs
