@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.OptionalInt;
 
 import com.google.protobuf.RpcController;
 import org.apache.hadoop.hdds.conf.Config;
@@ -55,6 +56,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import static org.apache.hadoop.ozone.protocol.proto
     .OzoneManagerProtocolProtos.OMTokenProto.Type.S3AUTHINFO;
+import static org.apache.hadoop.hdds.HddsUtils.getPortNumberFromConfigKeys;
 
 @SuppressFBWarnings("REC_CATCH_EXCEPTION")
 class OzoneManagerServiceGrpc extends OzoneManagerServiceImplBase {
@@ -209,6 +211,8 @@ public class GrpcOzoneManagerServer {
             omServerConfig));
 
     server = nettyServerBuilder.build();
+    LOG.info("{} instantiated for port {}",
+             getClass().getSimpleName(), this.port);
   }
 
   public void start() throws IOException {
@@ -229,7 +233,21 @@ public class GrpcOzoneManagerServer {
   public int getPort() {
     return port; }
 
-  @ConfigGroup(prefix = "ozone.om.protocolPB")
+  public static void updateOmS3gGrpcServerAddress(OzoneConfiguration config,
+                                                  String addr) {
+    OptionalInt port = getPortNumberFromConfigKeys(config, addr);
+    if (port.isPresent()) {
+      int newPort = config.getObject(
+          GrpcOzoneManagerServerConfig.class).getPort() +
+          (port.getAsInt() % 10) + 1;
+
+      config.set("ozone.om.grpc.port", String.valueOf(newPort));
+      //config.getObject(
+      //    GrpcOzoneManagerServerConfig.class).setPort(newPort);
+    }
+  }
+
+  @ConfigGroup(prefix = "ozone.om.grpc")
   public static final class GrpcOzoneManagerServerConfig {
     @Config(key = "port", defaultValue = "8981",
         description = "Port used for"

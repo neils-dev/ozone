@@ -103,6 +103,7 @@ import org.apache.hadoop.ozone.audit.AuditMessage;
 import org.apache.hadoop.ozone.audit.Auditor;
 import org.apache.hadoop.ozone.audit.OMAction;
 import org.apache.hadoop.ozone.common.Storage.StorageState;
+import org.apache.hadoop.ozone.ha.ConfUtils;
 import org.apache.hadoop.ozone.om.exceptions.OMException;
 import org.apache.hadoop.ozone.om.exceptions.OMException.ResultCodes;
 import org.apache.hadoop.ozone.om.exceptions.OMLeaderNotReadyException;
@@ -212,6 +213,7 @@ import static org.apache.hadoop.ozone.OzoneConsts.OM_METRICS_FILE;
 import static org.apache.hadoop.ozone.OzoneConsts.OM_METRICS_TEMP_FILE;
 import static org.apache.hadoop.ozone.OzoneConsts.OM_RATIS_SNAPSHOT_DIR;
 import static org.apache.hadoop.ozone.OzoneConsts.RPC_PORT;
+import static org.apache.hadoop.ozone.om.GrpcOzoneManagerServer.updateOmS3gGrpcServerAddress;
 import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_ADDRESS_KEY;
 import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_ENABLE_FILESYSTEM_PATHS;
 import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_ENABLE_FILESYSTEM_PATHS_DEFAULT;
@@ -503,6 +505,11 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
         OZONE_OM_ADDRESS_KEY, omNodeRpcAddr, omRpcServer);
 
     // Start S3g Om gRPC Server.
+    updateOmS3gGrpcServerAddress(configuration,
+        ConfUtils.addKeySuffixes(
+          OZONE_OM_ADDRESS_KEY,
+          omNodeDetails.getServiceId(),
+          omNodeDetails.getNodeId()));
     omS3gGrpcServer = getOmS3gGrpcServer(configuration);
     
     shutdownHook = () -> {
@@ -900,10 +907,6 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
    */
   private GrpcOzoneManagerServer startGrpcServer(OzoneConfiguration conf)
           throws IOException {
-    /*return new GrpcOzoneManagerServer(conf.getObject(
-            GrpcOzoneManagerServerConfig.class),
-            this.omServerProtocol,
-            this.delegationTokenMgr); */
     return new GrpcOzoneManagerServer(conf,
         this.omServerProtocol,
         this.delegationTokenMgr);
@@ -3685,7 +3688,7 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
       if (isAclEnabled) {
         InetAddress remoteIp = Server.getRemoteIp();
         resolved = resolveBucketLink(requested, new HashSet<>(),
-            Server.getRemoteUser(),
+            getRemoteUser(),
             remoteIp,
             remoteIp != null ? remoteIp.getHostName() :
                 omRpcAddress.getHostName());

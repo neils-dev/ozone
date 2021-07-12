@@ -24,7 +24,7 @@ import org.apache.hadoop.hdds.scm.server.SCMHTTPServerConfig;
 import org.apache.hadoop.ozone.om.OMConfigKeys;
 import org.apache.hadoop.hdds.scm.ScmConfigKeys;
 import org.apache.hadoop.ozone.recon.ReconServerConfigKeys;
-import org.apache.hadoop.ozone.s3.S3GatewayConfigKeys;
+//import org.apache.hadoop.ozone.s3.S3GatewayConfigKeys;
 
 import java.util.Arrays;
 import org.junit.Rule;
@@ -48,7 +48,7 @@ public class TestOzoneConfigurationFields extends TestConfigurationFieldsBase {
         new Class[] {OzoneConfigKeys.class, ScmConfigKeys.class,
             OMConfigKeys.class, HddsConfigKeys.class,
             ReconServerConfigKeys.class,
-            S3GatewayConfigKeys.class,
+ //           S3GatewayConfigKeys.class,
             SCMHTTPServerConfig.class,
             SCMHTTPServerConfig.ConfigStrings.class,
             ScmConfig.ConfigStrings.class
