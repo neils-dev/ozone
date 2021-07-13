@@ -38,6 +38,7 @@ public class TestOzoneConfigurationFields extends TestConfigurationFieldsBase {
   /**
     * Set a timeout for each test.
     */
+
   @Rule
   public Timeout timeout = Timeout.seconds(300);
 
@@ -61,6 +62,18 @@ public class TestOzoneConfigurationFields extends TestConfigurationFieldsBase {
     xmlPrefixToSkipCompare.add("ipc.client.rpc-timeout.ms");
     xmlPropsToSkipCompare.add("ozone.om.leader.election.minimum.timeout" +
         ".duration"); // Deprecated config
+    xmlPrefixToSkipCompare.add("ozone.s3g.http.enabled");
+    xmlPrefixToSkipCompare.add("ozone.s3g.http-bind-host");
+    xmlPrefixToSkipCompare.add("ozone.s3g.https-bind-host");
+    xmlPrefixToSkipCompare.add("ozone.s3g.http-address");
+    xmlPrefixToSkipCompare.add("ozone.s3g.https-address");
+    xmlPrefixToSkipCompare.add("ozone.s3g.domain.name");
+    xmlPrefixToSkipCompare.add("ozone.s3g.http.auth.type");
+    xmlPrefixToSkipCompare.add("ozone.s3g.http.auth.kerberos.keytab");
+    xmlPrefixToSkipCompare.add("ozone.s3g.http.auth.kerberos.principal");
+    xmlPrefixToSkipCompare.add("ozone.s3g.client.buffer.size");
+
+
     addPropertiesNotInXml();
   }
 
