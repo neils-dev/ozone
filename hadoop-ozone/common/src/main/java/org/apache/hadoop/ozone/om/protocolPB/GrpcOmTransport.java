@@ -148,15 +148,16 @@ public class GrpcOmTransport implements OmTransport {
     host = initHosts();
     port = conf.getObject(GrpcOmTransportConfig.class).getPort();
 
-    for (String host : omAddresses) {
+    for (String hostaddr : omAddresses) {
       NettyChannelBuilder channelBuilder =
-          NettyChannelBuilder.forAddress(host, port)
+          NettyChannelBuilder.forAddress(hostaddr, port)
               .usePlaintext()
               .maxInboundMessageSize(OzoneConsts.OZONE_SCM_CHUNK_MAX_SIZE);
 
-      channels.put(host, channelBuilder.build());
-      clients.put(host,
-                  OzoneManagerServiceGrpc.newBlockingStub(channels.get(host)));
+      channels.put(hostaddr, channelBuilder.build());
+      clients.put(hostaddr,
+                  OzoneManagerServiceGrpc
+                  .newBlockingStub(channels.get(hostaddr)));
     }
 
     LOG.info("{}: started", CLIENT_NAME);
