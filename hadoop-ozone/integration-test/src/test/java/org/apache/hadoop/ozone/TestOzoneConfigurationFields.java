@@ -72,6 +72,8 @@ public class TestOzoneConfigurationFields extends TestConfigurationFieldsBase {
     xmlPrefixToSkipCompare.add("ozone.s3g.http.auth.kerberos.keytab");
     xmlPrefixToSkipCompare.add("ozone.s3g.http.auth.kerberos.principal");
     xmlPrefixToSkipCompare.add("ozone.s3g.client.buffer.size");
+    configurationPropsToSkipCompare
+            .add(ScmConfig.ConfigStrings.HDDS_SCM_INIT_DEFAULT_LAYOUT_VERSION);
 
 
     addPropertiesNotInXml();
@@ -89,6 +91,7 @@ public class TestOzoneConfigurationFields extends TestConfigurationFieldsBase {
         ScmConfigKeys.OZONE_SCM_ADDRESS_KEY,
         OMConfigKeys.OZONE_FS_TRASH_INTERVAL_KEY,
         OMConfigKeys.OZONE_FS_TRASH_CHECKPOINT_INTERVAL_KEY,
+        OMConfigKeys.OZONE_OM_GRPC_PORT_KEY,
         OzoneConfigKeys.OZONE_ACL_AUTHORIZER_CLASS_NATIVE,
         OzoneConfigKeys.OZONE_S3_AUTHINFO_MAX_LIFETIME_KEY,
         ReconServerConfigKeys.OZONE_RECON_SCM_DB_DIR,
