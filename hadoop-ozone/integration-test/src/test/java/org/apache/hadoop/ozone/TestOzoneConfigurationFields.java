@@ -24,7 +24,7 @@ import org.apache.hadoop.hdds.scm.server.SCMHTTPServerConfig;
 import org.apache.hadoop.ozone.om.OMConfigKeys;
 import org.apache.hadoop.hdds.scm.ScmConfigKeys;
 import org.apache.hadoop.ozone.recon.ReconServerConfigKeys;
-import org.apache.hadoop.ozone.s3.S3GatewayConfigKeys;
+//import org.apache.hadoop.ozone.s3.S3GatewayConfigKeys;
 
 import java.util.Arrays;
 import org.junit.Rule;
@@ -38,6 +38,7 @@ public class TestOzoneConfigurationFields extends TestConfigurationFieldsBase {
   /**
     * Set a timeout for each test.
     */
+
   @Rule
   public Timeout timeout = Timeout.seconds(300);
 
@@ -48,7 +49,7 @@ public class TestOzoneConfigurationFields extends TestConfigurationFieldsBase {
         new Class[] {OzoneConfigKeys.class, ScmConfigKeys.class,
             OMConfigKeys.class, HddsConfigKeys.class,
             ReconServerConfigKeys.class,
-            S3GatewayConfigKeys.class,
+ //           S3GatewayConfigKeys.class,
             SCMHTTPServerConfig.class,
             SCMHTTPServerConfig.ConfigStrings.class,
             ScmConfig.ConfigStrings.class
@@ -61,8 +62,18 @@ public class TestOzoneConfigurationFields extends TestConfigurationFieldsBase {
     xmlPrefixToSkipCompare.add("ipc.client.rpc-timeout.ms");
     xmlPropsToSkipCompare.add("ozone.om.leader.election.minimum.timeout" +
         ".duration"); // Deprecated config
-    configurationPropsToSkipCompare
-        .add(ScmConfig.ConfigStrings.HDDS_SCM_INIT_DEFAULT_LAYOUT_VERSION);
+    xmlPrefixToSkipCompare.add("ozone.s3g.http.enabled");
+    xmlPrefixToSkipCompare.add("ozone.s3g.http-bind-host");
+    xmlPrefixToSkipCompare.add("ozone.s3g.https-bind-host");
+    xmlPrefixToSkipCompare.add("ozone.s3g.http-address");
+    xmlPrefixToSkipCompare.add("ozone.s3g.https-address");
+    xmlPrefixToSkipCompare.add("ozone.s3g.domain.name");
+    xmlPrefixToSkipCompare.add("ozone.s3g.http.auth.type");
+    xmlPrefixToSkipCompare.add("ozone.s3g.http.auth.kerberos.keytab");
+    xmlPrefixToSkipCompare.add("ozone.s3g.http.auth.kerberos.principal");
+    xmlPrefixToSkipCompare.add("ozone.s3g.client.buffer.size");
+
+
     addPropertiesNotInXml();
   }
 

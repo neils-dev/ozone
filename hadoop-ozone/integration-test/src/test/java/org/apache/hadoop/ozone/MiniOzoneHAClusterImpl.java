@@ -657,11 +657,14 @@ public class MiniOzoneHAClusterImpl extends MiniOzoneClusterImpl {
             OMConfigKeys.OZONE_OM_HTTPS_ADDRESS_KEY, omServiceId, omNodeId);
         String omRatisPortKey = ConfUtils.addKeySuffixes(
             OMConfigKeys.OZONE_OM_RATIS_PORT_KEY, omServiceId, omNodeId);
+        String omGrpcPortKey = ConfUtils.addKeySuffixes(
+                OMConfigKeys.OZONE_OM_GRPC_PORT_KEY, omServiceId, omNodeId);
 
         conf.set(omAddrKey, "127.0.0.1:" + port);
         conf.set(omHttpAddrKey, "127.0.0.1:" + (port + 2));
         conf.set(omHttpsAddrKey, "127.0.0.1:" + (port + 3));
         conf.setInt(omRatisPortKey, port + 4);
+        conf.setInt(omGrpcPortKey, port + 5);
       }
 
       conf.set(omNodesKey, omNodesKeyValue.substring(1));

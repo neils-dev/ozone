@@ -23,6 +23,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.lang.reflect.Constructor;
 
+import com.google.common.net.HostAndPort;
+import org.apache.hadoop.hdds.HddsUtils;
 import org.apache.hadoop.hdds.conf.Config;
 import org.apache.hadoop.hdds.conf.ConfigGroup;
 import org.apache.hadoop.hdds.conf.ConfigTag;
@@ -32,6 +34,7 @@ import org.apache.hadoop.io.retry.RetryProxy;
 import org.apache.hadoop.ozone.OmUtils;
 import org.apache.hadoop.ozone.OzoneConsts;
 import org.apache.hadoop.ozone.ha.ConfUtils;
+import org.apache.hadoop.ozone.om.OMConfigKeys;
 import org.apache.hadoop.ozone.om.exceptions.OMNotLeaderException;
 import org.apache.hadoop.ozone.om.ha.OMFailoverProxyProvider;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos.OMRequest;
@@ -82,7 +85,7 @@ public class GrpcOmTransport implements OmTransport {
   private Map<String, ManagedChannel> channels;
   private int lastVisited = -1;
   private String host = "om";
-  private int port = 8981;
+  private int port = -1;
   private ConfigurationSource conf;
 
 
@@ -114,14 +117,19 @@ public class GrpcOmTransport implements OmTransport {
         Collections.singletonList(localOMServiceId);
 
     List<String> oms = new ArrayList<>();
+    port = conf.getObject(GrpcOmTransportConfig.class).getPort();
     for (String serviceId : omServiceIds) {
       Collection<String> omNodeIds = OmUtils.getOMNodeIds(conf, serviceId);
       for (String nodeId : omNodeIds) {
         Optional<String> hostaddr = getHostNameFromConfigKeys(conf,
             ConfUtils.addKeySuffixes(OZONE_OM_ADDRESS_KEY,
                 serviceId, nodeId));
+        OptionalInt hostport = HddsUtils.getNumberFromConfigKeys(conf,
+                ConfUtils.addKeySuffixes(OMConfigKeys.OZONE_OM_GRPC_PORT_KEY,
+                        serviceId, nodeId),
+                OMConfigKeys.OZONE_OM_GRPC_PORT_KEY);
         if (hostaddr.isPresent()) {
-          oms.add(hostaddr.get());
+          oms.add(hostaddr.get() + ":" + hostport.orElse(port));
         }
       }
     }
@@ -131,7 +139,9 @@ public class GrpcOmTransport implements OmTransport {
     if (oms.size() == 0) {
       Optional<String> omHost = getHostNameFromConfigKeys(conf,
           OZONE_OM_ADDRESS_KEY);
-      hostaddr = omHost.orElse("0.0.0.0");
+      OptionalInt omPort = HddsUtils.getNumberFromConfigKeys(conf,
+          OMConfigKeys.OZONE_OM_GRPC_PORT_KEY);
+      hostaddr = omHost.orElse("0.0.0.0")  + ":" + omPort.orElse(port);
       omAddresses.add(hostaddr);
     } else {
       hostaddr = omAddresses.get(0);
@@ -146,11 +156,10 @@ public class GrpcOmTransport implements OmTransport {
     }
 
     host = initHosts();
-    port = conf.getObject(GrpcOmTransportConfig.class).getPort();
-
     for (String hostaddr : omAddresses) {
+      HostAndPort hp = HostAndPort.fromString(hostaddr);
       NettyChannelBuilder channelBuilder =
-          NettyChannelBuilder.forAddress(hostaddr, port)
+          NettyChannelBuilder.forAddress(hp.getHost(), hp.getPort())
               .usePlaintext()
               .maxInboundMessageSize(OzoneConsts.OZONE_SCM_CHUNK_MAX_SIZE);
 
@@ -208,6 +217,9 @@ public class GrpcOmTransport implements OmTransport {
     return resp;
   }
 
+  /**
+   * GrpcOmTransport configuration in Java style configuration class.
+   */
   @ConfigGroup(prefix = "ozone.om.protocolPB")
   public static final class GrpcOmTransportConfig {
     @Config(key = "port", defaultValue = "8981",

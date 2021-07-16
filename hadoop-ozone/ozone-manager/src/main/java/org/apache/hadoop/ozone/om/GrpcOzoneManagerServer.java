@@ -21,14 +21,17 @@ import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.OptionalInt;
 
 import com.google.protobuf.RpcController;
+import org.apache.hadoop.hdds.HddsUtils;
 import org.apache.hadoop.hdds.conf.Config;
 import org.apache.hadoop.hdds.conf.ConfigGroup;
 import org.apache.hadoop.hdds.conf.ConfigTag;
 import org.apache.hadoop.hdds.security.x509.SecurityConfig;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.ozone.OzoneConsts;
+import org.apache.hadoop.ozone.ha.ConfUtils;
 import org.apache.hadoop.ozone.om.ratis.utils.OzoneManagerRatisUtils;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerServiceGrpc
@@ -184,7 +187,7 @@ public class GrpcOzoneManagerServer {
 
   private Server server;
   private final String host = "0.0.0.0";
-  private int port = 8981;
+  private int port = -1;
 
   public GrpcOzoneManagerServer(OzoneConfiguration config,
                                 OzoneManagerProtocolServerSideTranslatorPB
@@ -194,6 +197,15 @@ public class GrpcOzoneManagerServer {
     this.port = config.getObject(
         GrpcOzoneManagerServerConfig.class).
         getPort();
+    OptionalInt haPort = HddsUtils.getNumberFromConfigKeys(config,
+        ConfUtils.addKeySuffixes(
+            OMConfigKeys.OZONE_OM_GRPC_PORT_KEY,
+            config.get(OMConfigKeys.OZONE_OM_SERVICE_IDS_KEY),
+            config.get(OMConfigKeys.OZONE_OM_NODE_ID_KEY)),
+        OMConfigKeys.OZONE_OM_GRPC_PORT_KEY);
+    if (haPort.isPresent()) {
+      port = haPort.getAsInt();
+    }
     init(omTranslator,
         delegationTokenMgr,
         config);
@@ -229,6 +241,9 @@ public class GrpcOzoneManagerServer {
   public int getPort() {
     return port; }
 
+  /**
+   * GrpcOzoneManagerServer configuration in Java style configuration class.
+   */
   @ConfigGroup(prefix = "ozone.om.protocolPB")
   public static final class GrpcOzoneManagerServerConfig {
     @Config(key = "port", defaultValue = "8981",
