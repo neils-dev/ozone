@@ -54,6 +54,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
 /**
@@ -73,6 +74,8 @@ public class TestSCMInstallSnapshotWithHA {
 
   private static final long SNAPSHOT_THRESHOLD = 5;
   private static final int LOG_PURGE_GAP = 5;
+  private static final Logger LOG = LoggerFactory.getLogger(
+      TestSCMInstallSnapshotWithHA.class);
 
   /**
    * Create a MiniOzoneCluster for testing.
@@ -136,8 +139,19 @@ public class TestSCMInstallSnapshotWithHA {
     // The recently started  should be lagging behind the leader .
     SCMStateMachine followerSM =
         followerSCM.getScmHAManager().getRatisServer().getSCMStateMachine();
-    long followerLastAppliedIndex =
+    long followerLastAppliedIndex;
+    long logIndex = leaderSCM.getScmHAManager()
+        .getRatisServer()
+        .getSCMStateMachine()
+        .getLastAppliedTermIndex().getIndex();
+    GenericTestUtils.waitFor(() -> {
+      LOG.info("followerLastAppliedIndex {}, logIndex {}",
+          followerSM.getLastAppliedTermIndex().getIndex(), logIndex);
+      return followerSM.getLastAppliedTermIndex().getIndex() >= 200;
+    }, 100, 3000);
+    followerLastAppliedIndex =
         followerSM.getLastAppliedTermIndex().getIndex();
+    LOG.info("followerLastAppliedIndex {}", followerLastAppliedIndex);
     assertTrue(followerLastAppliedIndex >= 200);
     assertFalse(followerSM.getLifeCycleState().isPausingOrPaused());
 

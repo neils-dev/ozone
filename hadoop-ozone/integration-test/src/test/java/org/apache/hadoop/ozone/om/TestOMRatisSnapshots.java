@@ -49,6 +49,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
 /**
@@ -70,6 +71,8 @@ public class TestOMRatisSnapshots {
 
   private static final long SNAPSHOT_THRESHOLD = 50;
   private static final int LOG_PURGE_GAP = 50;
+  private static final Logger LOG = LoggerFactory.getLogger(
+      TestOMRatisSnapshots.class);
 
   /**
    * Create a MiniOzoneCluster for testing. The cluster initially has one
@@ -158,12 +161,18 @@ public class TestOMRatisSnapshots {
 
     // Start the inactive OM
     cluster.startInactiveOM(followerNodeId);
-
     // The recently started OM should be lagging behind the leader OM.
-    long followerOMLastAppliedIndex =
+    long followerOMLastAppliedIndex;
+    GenericTestUtils.waitFor(() -> {
+      return followerOM.getOmRatisServer().getLastAppliedTermIndex().getIndex()
+          >= leaderOMSnaphsotIndex - 1;
+    }, 100, 3000);
+
+    followerOMLastAppliedIndex =
         followerOM.getOmRatisServer().getLastAppliedTermIndex().getIndex();
+    LOG.info("followerOMLastAppliedIndex {}", followerOMLastAppliedIndex);
     assertTrue(
-        followerOMLastAppliedIndex < leaderOMSnaphsotIndex);
+        followerOMLastAppliedIndex >= leaderOMSnaphsotIndex - 1);
 
     // Install leader OM's db checkpoint on the lagging OM.
     followerOM.installCheckpoint(leaderOMNodeId, leaderDbCheckpoint);

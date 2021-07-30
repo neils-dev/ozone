@@ -652,7 +652,9 @@ public final class TestSecureOzoneCluster {
 
       // secret should differ because it has been revoked previously
       int retries = 2;
-      while ((attempt3.getAwsSecret() == attempt2.getAwsSecret()) && retries > 0 ) {
+      while ((attempt3.getAwsSecret()
+          == attempt2.getAwsSecret())
+          && retries > 0) {
         retries--;
         Thread.sleep(100);
       }
