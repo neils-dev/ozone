@@ -651,13 +651,10 @@ public final class TestSecureOzoneCluster {
       S3SecretValue attempt3 = omClient.getS3Secret(username);
 
       // secret should differ because it has been revoked previously
-      int retries = 2;
-      while ((attempt3.getAwsSecret()
-          == attempt2.getAwsSecret())
-          && retries > 0) {
-        retries--;
-        Thread.sleep(100);
-      }
+      GenericTestUtils.waitFor(() -> {
+        return attempt3.getAwsSecret()
+            != attempt2.getAwsSecret();
+      }, 100, 3000);
       assertNotEquals(attempt3.getAwsSecret(), attempt2.getAwsSecret());
 
       // accessKey is still the same because it is derived from username
