@@ -647,14 +647,19 @@ public final class TestSecureOzoneCluster {
       // Revoke the existing secret
       omClient.revokeS3Secret(username);
 
-      // Get a new secret
-      S3SecretValue attempt3 = omClient.getS3Secret(username);
 
       // secret should differ because it has been revoked previously
       GenericTestUtils.waitFor(() -> {
-        return attempt3.getAwsSecret()
-            != attempt2.getAwsSecret();
+        try {
+          return omClient.getS3Secret(username).getAwsSecret()
+              != attempt2.getAwsSecret();
+        } catch (IOException ex) {
+          return false;
+        }
       }, 100, 3000);
+
+      // Get a new secret
+      S3SecretValue attempt3 = omClient.getS3Secret(username);
       assertNotEquals(attempt3.getAwsSecret(), attempt2.getAwsSecret());
 
       // accessKey is still the same because it is derived from username
