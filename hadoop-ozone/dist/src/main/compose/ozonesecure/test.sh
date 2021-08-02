@@ -43,9 +43,9 @@ for scheme in ofs o3fs; do
   done
 done
 
-for bucket in link generated; do
-  execute_robot_test s3g -v BUCKET:${bucket} -N s3-${bucket} s3
-done
+#for bucket in link generated; do
+#  execute_robot_test s3g -v BUCKET:${bucket} -N s3-${bucket} s3
+#done
 
 #expects 4 pipelines, should be run before
 #admincli which creates STANDALONE pipeline
