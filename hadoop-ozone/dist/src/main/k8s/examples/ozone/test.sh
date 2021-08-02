@@ -28,7 +28,7 @@ regenerate_resources
 
 start_k8s_env
 
-execute_robot_test scm-0 smoketest/basic/basic.robot
+#execute_robot_test scm-0 smoketest/basic/basic.robot
 
 combine_reports
 
