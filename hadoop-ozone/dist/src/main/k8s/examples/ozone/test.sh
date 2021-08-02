@@ -26,7 +26,7 @@ rm -rf result
 
 regenerate_resources
 
-start_k8s_env
+#start_k8s_env
 
 #execute_robot_test scm-0 smoketest/basic/basic.robot
 
@@ -34,6 +34,6 @@ combine_reports
 
 get_logs
 
-stop_k8s_env
+#stop_k8s_env
 
 revert_resources
