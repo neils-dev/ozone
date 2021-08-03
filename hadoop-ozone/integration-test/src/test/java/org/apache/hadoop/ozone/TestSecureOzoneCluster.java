@@ -649,14 +649,6 @@ public final class TestSecureOzoneCluster {
 
 
       // secret should differ because it has been revoked previously
-      GenericTestUtils.waitFor(() -> {
-        try {
-          return omClient.getS3Secret(username).getAwsSecret()
-              != attempt2.getAwsSecret();
-        } catch (IOException ex) {
-          return false;
-        }
-      }, 100, 3000);
 
       // Get a new secret
       S3SecretValue attempt3 = omClient.getS3Secret(username);

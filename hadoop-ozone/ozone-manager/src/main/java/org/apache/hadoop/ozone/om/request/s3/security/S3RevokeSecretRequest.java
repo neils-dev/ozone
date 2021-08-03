@@ -118,6 +118,8 @@ public class S3RevokeSecretRequest extends OMClientRequest {
             new CacheValue<>(Optional.absent(), transactionLogIndex));
         omClientResponse = new S3RevokeSecretResponse(kerberosID,
                 omResponse.setStatus(Status.OK).build());
+        // added HDDS-5358
+        omMetadataManager.getS3SecretTable().delete(kerberosID);
       } else {
         omClientResponse = new S3RevokeSecretResponse(null,
                 omResponse.setStatus(Status.S3_SECRET_NOT_FOUND).build());
