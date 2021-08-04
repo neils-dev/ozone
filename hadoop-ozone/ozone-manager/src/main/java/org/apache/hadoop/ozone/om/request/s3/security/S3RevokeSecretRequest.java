@@ -119,7 +119,7 @@ public class S3RevokeSecretRequest extends OMClientRequest {
         omClientResponse = new S3RevokeSecretResponse(kerberosID,
                 omResponse.setStatus(Status.OK).build());
         // added HDDS-5358
-        omMetadataManager.getS3SecretTable().delete(kerberosID);
+        // omMetadataManager.getS3SecretTable().delete(kerberosID);
       } else {
         omClientResponse = new S3RevokeSecretResponse(null,
                 omResponse.setStatus(Status.S3_SECRET_NOT_FOUND).build());
@@ -129,8 +129,22 @@ public class S3RevokeSecretRequest extends OMClientRequest {
       omClientResponse = new S3RevokeSecretResponse(null,
           createErrorOMResponse(omResponse, ex));
     } finally {
+
       addResponseToDoubleBuffer(transactionLogIndex, omClientResponse,
           ozoneManagerDoubleBufferHelper);
+
+      // added HDDS-5358
+      try {
+        if (omClientResponse.getFlushFuture() == null) {
+            omMetadataManager.getS3SecretTable().delete(kerberosID);
+
+        } else {
+          omClientResponse.getFlushFuture().get();
+        }
+      } catch (Throwable e)  {
+        omClientResponse = new S3RevokeSecretResponse(null,
+            createErrorOMResponse(omResponse, new IOException(e)));
+      }
       if (acquiredLock) {
         omMetadataManager.getLock().releaseWriteLock(S3_SECRET_LOCK,
             kerberosID);
