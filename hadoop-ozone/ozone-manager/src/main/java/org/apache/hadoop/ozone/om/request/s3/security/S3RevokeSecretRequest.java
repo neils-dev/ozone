@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.hadoop.ozone.om.lock.OzoneManagerLock.Resource.S3_SECRET_LOCK;
 
@@ -135,13 +136,14 @@ public class S3RevokeSecretRequest extends OMClientRequest {
 
       // added HDDS-5358
       try {
-        if (omClientResponse.getFlushFuture() == null) {
+        /*if (omClientResponse.getFlushFuture() == null) { */
             omMetadataManager.getS3SecretTable().delete(kerberosID);
 
-        } else {
-          omClientResponse.getFlushFuture().get();
-        }
+        /*} else {
+          omClientResponse.getFlushFuture().get(6000, TimeUnit.MILLISECONDS);
+        }*/
       } catch (Throwable e)  {
+        exception = new IOException(e);
         omClientResponse = new S3RevokeSecretResponse(null,
             createErrorOMResponse(omResponse, new IOException(e)));
       }
@@ -164,7 +166,8 @@ public class S3RevokeSecretRequest extends OMClientRequest {
         LOG.info("Secret for {} doesn't exist.", kerberosID);
       }
     } else {
-      LOG.error("Error when revoking secret for {}.", kerberosID, exception);
+      //LOG.error("Error when revoking secret for {}.", kerberosID, exception);
+      LOG.info("Error when revoking secret for {}.", kerberosID, exception);
     }
     return omClientResponse;
   }
