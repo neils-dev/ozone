@@ -136,6 +136,8 @@ public class S3RevokeSecretRequest extends OMClientRequest {
 
       // added HDDS-5358
       try {
+        LOG.info("secret exists (should be false) {}",
+            omMetadataManager.getS3SecretTable().isExist(kerberosID));
         /*if (omClientResponse.getFlushFuture() == null) { */
             //omMetadataManager.getS3SecretTable().delete(kerberosID);
 
