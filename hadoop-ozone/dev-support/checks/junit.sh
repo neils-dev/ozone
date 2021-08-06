@@ -69,6 +69,9 @@ for i in $(seq 1 ${ITERATIONS}); do
   if [[ ${rc} == 0 ]]; then
     rc=${irc}
   fi
+
+  echo cp -R hadoop-ozone/integration-test/target/surefire-reports "${REPORT_DIR}/iteration${i}"
+  cp -R hadoop-ozone/integration-test/target/surefire-reports "${REPORT_DIR}/iteration${i}"
 done
 
 #Archive combined jacoco records

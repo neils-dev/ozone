@@ -137,7 +137,7 @@ public class S3RevokeSecretRequest extends OMClientRequest {
       // added HDDS-5358
       try {
         /*if (omClientResponse.getFlushFuture() == null) { */
-            omMetadataManager.getS3SecretTable().delete(kerberosID);
+            //omMetadataManager.getS3SecretTable().delete(kerberosID);
 
         /*} else {
           omClientResponse.getFlushFuture().get(6000, TimeUnit.MILLISECONDS);
