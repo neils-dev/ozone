@@ -27,6 +27,7 @@ import org.apache.hadoop.ozone.audit.OMAction;
 import org.apache.hadoop.ozone.om.OMMetadataManager;
 import org.apache.hadoop.ozone.om.OzoneManager;
 import org.apache.hadoop.ozone.om.exceptions.OMException;
+import org.apache.hadoop.ozone.om.helpers.S3SecretValue;
 import org.apache.hadoop.ozone.om.ratis.utils.OzoneManagerDoubleBufferHelper;
 import org.apache.hadoop.ozone.om.request.OMClientRequest;
 import org.apache.hadoop.ozone.om.request.util.OmResponseUtil;
@@ -136,14 +137,21 @@ public class S3RevokeSecretRequest extends OMClientRequest {
 
       // added HDDS-5358
       try {
-        LOG.info("secret exists (should be false) {}",
-            omMetadataManager.getS3SecretTable().isExist(kerberosID));
-        /*if (omClientResponse.getFlushFuture() == null) { */
-            //omMetadataManager.getS3SecretTable().delete(kerberosID);
+        /*LOG.info("secret exists (should be false) {}",
+            omMetadataManager.getS3SecretTable().isExist(kerberosID)); */
+        long startTime = System.currentTimeMillis();
+        while (omMetadataManager.getS3SecretTable().get(kerberosID) != null) {
+          if ((System.currentTimeMillis() - startTime) > 6000) {
+            throw new IOException("Timed out updating s3 table for revoke secret");
+          }
+          Thread.sleep(100);
+        }
 
-        /*} else {
-          omClientResponse.getFlushFuture().get(6000, TimeUnit.MILLISECONDS);
-        }*/
+        S3SecretValue s3SecretValue =
+            omMetadataManager.getS3SecretTable().get(kerberosID);
+        LOG.info("secret {}",
+            s3SecretValue);
+
       } catch (Throwable e)  {
         exception = new IOException(e);
         omClientResponse = new S3RevokeSecretResponse(null,
@@ -168,8 +176,7 @@ public class S3RevokeSecretRequest extends OMClientRequest {
         LOG.info("Secret for {} doesn't exist.", kerberosID);
       }
     } else {
-      //LOG.error("Error when revoking secret for {}.", kerberosID, exception);
-      LOG.info("Error when revoking secret for {}.", kerberosID, exception);
+      LOG.error("Error when revoking secret for {}.", kerberosID, exception);
     }
     return omClientResponse;
   }
