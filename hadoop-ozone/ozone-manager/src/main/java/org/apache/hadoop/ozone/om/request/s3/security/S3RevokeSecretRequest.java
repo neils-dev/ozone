@@ -131,7 +131,7 @@ public class S3RevokeSecretRequest extends OMClientRequest {
           ozoneManagerDoubleBufferHelper);
 
     // added HDDS-5358
-      /*try {
+      try {
         long startTime = System.currentTimeMillis();
         while (omMetadataManager.getS3SecretTable().get(kerberosID) != null) {
           if ((System.currentTimeMillis() - startTime) > 6000) {
@@ -145,7 +145,7 @@ public class S3RevokeSecretRequest extends OMClientRequest {
         exception = new IOException(e);
         omClientResponse = new S3RevokeSecretResponse(null,
             createErrorOMResponse(omResponse, new IOException(e)));
-            }*/
+      }
       
       
       if (acquiredLock) {
