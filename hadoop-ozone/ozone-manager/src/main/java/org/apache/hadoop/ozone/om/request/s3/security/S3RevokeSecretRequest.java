@@ -113,7 +113,7 @@ public class S3RevokeSecretRequest extends OMClientRequest {
       // Remove if entry exists in table
       if (omMetadataManager.getS3SecretTable().isExist(kerberosID)) {
         // Invalid entry in table cache immediately
-        omMetadataManager.getKeyTable().addCacheEntry(
+        omMetadataManager.getS3SecretTable().addCacheEntry(
             new CacheKey<>(kerberosID),
             new CacheValue<>(Optional.absent(), transactionLogIndex));
         omClientResponse = new S3RevokeSecretResponse(kerberosID,
@@ -131,7 +131,7 @@ public class S3RevokeSecretRequest extends OMClientRequest {
           ozoneManagerDoubleBufferHelper);
 
     // added HDDS-5358
-      try {
+      /*try {
         long startTime = System.currentTimeMillis();
         while (omMetadataManager.getS3SecretTable().get(kerberosID) != null) {
           if ((System.currentTimeMillis() - startTime) > 6000) {
@@ -145,7 +145,7 @@ public class S3RevokeSecretRequest extends OMClientRequest {
         exception = new IOException(e);
         omClientResponse = new S3RevokeSecretResponse(null,
             createErrorOMResponse(omResponse, new IOException(e)));
-      }
+            }*/
       
       
       if (acquiredLock) {
