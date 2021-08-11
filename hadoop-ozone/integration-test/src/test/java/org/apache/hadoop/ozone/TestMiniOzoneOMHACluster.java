@@ -28,6 +28,8 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.Timeout;
+// HDDS-4440
+import org.junit.Ignore;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -41,6 +43,8 @@ import static org.apache.hadoop.ozone.OzoneConfigKeys.OZONE_OPEN_KEY_EXPIRE_THRE
 /**
  * This class tests MiniOzoneOMHAClusterImpl.
  */
+// HDDS-4440
+@Ignore
 public class TestMiniOzoneOMHACluster {
 
   private MiniOzoneOMHAClusterImpl cluster = null;

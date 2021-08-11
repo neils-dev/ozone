@@ -20,6 +20,8 @@ package org.apache.hadoop.ozone.om;
 import org.apache.hadoop.ozone.client.OzoneBucket;
 import org.apache.ozone.test.GenericTestUtils;
 import org.junit.Test;
+// HDDS-4440
+import org.junit.Ignore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +31,8 @@ import static org.junit.Assert.fail;
 /**
  * Tests key deletion in OM HA setup.
  */
+// HDDS-4440
+@Ignore
 public class TestOzoneManagerHAKeyDeletion extends TestOzoneManagerHA {
 
   @Test

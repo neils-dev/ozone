@@ -71,6 +71,8 @@ import static org.junit.Assert.fail;
 /**
  * Test Ozone Manager Metadata operation in distributed handler scenario.
  */
+// HDDS-4440
+@Ignore
 public class TestOzoneManagerHAMetadataOnly extends TestOzoneManagerHA {
 
   private OzoneVolume createAndCheckVolume(String volumeName)
