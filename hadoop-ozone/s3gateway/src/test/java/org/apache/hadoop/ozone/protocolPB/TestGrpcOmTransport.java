@@ -30,6 +30,9 @@ import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Tests for GrpcOmTransport.
+ */
 public class TestGrpcOmTransport {
 
   private static final Logger LOG =
@@ -57,9 +60,6 @@ public class TestGrpcOmTransport {
 
     UserGroupInformation ugi = UserGroupInformation.getCurrentUser();
     GrpcOmTransport client = new GrpcOmTransport(conf, ugi, omServiceId);
-    /*OmTransport omTransport = OmTransportFactory.create(conf, ugi, omServiceId);
-    Assert.assertEquals(GrpcOmTransport.class.getSimpleName(),
-        omTransport.getClass().getSimpleName());*/
 
     try {
       client.start();
