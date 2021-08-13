@@ -24,6 +24,8 @@ import org.apache.hadoop.ozone.security.acl.OzoneObj;
 import org.apache.hadoop.ozone.security.acl.OzoneObjInfo;
 import org.junit.Assert;
 import org.junit.Test;
+// HDDS-4440
+import org.junit.Ignore;
 
 import java.util.List;
 import java.util.BitSet;
@@ -38,6 +40,8 @@ import static org.apache.hadoop.ozone.security.acl.IAccessAuthorizer.ACLType.WRI
 /**
  * Test Ozone Manager ACL operation in distributed handler scenario.
  */
+// HDDS-4440
+@Ignore
 public class TestOzoneManagerHAWithACL extends TestOzoneManagerHA {
 
   @Test

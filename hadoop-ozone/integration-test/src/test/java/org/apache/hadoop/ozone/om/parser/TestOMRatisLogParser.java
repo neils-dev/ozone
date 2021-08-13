@@ -29,6 +29,7 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.Ignore;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -44,6 +45,8 @@ import static org.apache.hadoop.hdds.HddsConfigKeys.OZONE_METADATA_DIRS;
 /**
  * Test Datanode Ratis log parser.
  */
+// HDDS-4440
+@Ignore
 public class TestOMRatisLogParser {
 
   /**

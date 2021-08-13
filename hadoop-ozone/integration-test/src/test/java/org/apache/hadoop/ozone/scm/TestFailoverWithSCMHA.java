@@ -36,6 +36,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.event.Level;
+// HDDS-4440
+import org.junit.Ignore;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -43,6 +45,8 @@ import java.util.UUID;
 /**
  * Tests failover with SCM HA setup.
  */
+// HDDS-4440
+@Ignore
 public class TestFailoverWithSCMHA {
   private MiniOzoneHAClusterImpl cluster = null;
   private OzoneConfiguration conf;

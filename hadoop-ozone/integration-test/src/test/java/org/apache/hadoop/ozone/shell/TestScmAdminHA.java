@@ -28,9 +28,14 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+// HDDS-4440
+import org.junit.Ignore;
+
 /**
  * This class tests ozone admin scm commands.
  */
+// HDDS-4440
+@Ignore
 public class TestScmAdminHA {
   private static OzoneAdmin ozoneAdmin;
   private static OzoneConfiguration conf;

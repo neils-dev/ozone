@@ -52,12 +52,17 @@ import java.util.UUID;
 
 import org.junit.Rule;
 import org.junit.rules.Timeout;
+// HDDS-4440
+import org.junit.Ignore;
+
 import static org.apache.hadoop.hdds.HddsUtils.getHostName;
 import static org.apache.hadoop.hdds.HddsUtils.getHostPort;
 
 /**
  * Test client-side URI handling with Ozone Manager HA.
  */
+// HDDS-4440
+@Ignore
 public class TestOzoneFsHAURLs {
 
   /**

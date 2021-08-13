@@ -56,6 +56,8 @@ import static org.junit.Assert.fail;
 /**
  * Test Ozone Manager operation in distributed handler scenario.
  */
+// HDDS-4440
+@Ignore
 public class TestOzoneManagerHAWithData extends TestOzoneManagerHA {
 
   /**
