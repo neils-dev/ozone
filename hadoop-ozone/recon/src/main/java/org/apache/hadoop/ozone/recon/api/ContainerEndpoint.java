@@ -365,9 +365,8 @@ public class ContainerEndpoint {
     List<ContainerBlockMetadata> blockIds = new ArrayList<>();
     for (OmKeyLocationInfoGroup omKeyLocationInfoGroup : matchedKeys) {
       List<OmKeyLocationInfo> omKeyLocationInfos = omKeyLocationInfoGroup
-          .getLocationLists()
+          .getLocationList()
           .stream()
-          .flatMap(List::stream)
           .filter(c -> c.getContainerID() == containerID)
           .collect(Collectors.toList());
       for (OmKeyLocationInfo omKeyLocationInfo : omKeyLocationInfos) {

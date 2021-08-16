@@ -167,9 +167,8 @@ public class KeyInputStream extends InputStream
             BlockID blockID = keyLocationInfo.getBlockID();
             List<OmKeyLocationInfo> collect =
                 newKeyInfo.getLatestVersionLocations()
-                .getLocationLists()
+                .getLocationList()
                 .stream()
-                .flatMap(List::stream)
                 .filter(l -> l.getBlockID().equals(blockID))
                 .collect(Collectors.toList());
             if (CollectionUtils.isNotEmpty(collect)) {
