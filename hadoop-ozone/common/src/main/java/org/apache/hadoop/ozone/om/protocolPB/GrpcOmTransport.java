@@ -157,4 +157,11 @@ public class GrpcOmTransport implements OmTransport {
     }
   }
 
+  @VisibleForTesting
+  public void startClient(ManagedChannel channel) {
+    client = OzoneManagerServiceGrpc.newBlockingStub(channel);
+
+    LOG.info("{}: started", CLIENT_NAME);
+  }
+
 }
