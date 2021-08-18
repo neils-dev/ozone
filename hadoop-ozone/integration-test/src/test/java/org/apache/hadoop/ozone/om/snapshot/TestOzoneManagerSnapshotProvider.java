@@ -41,10 +41,14 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
+// HDDS-4440
+import org.junit.Ignore;
 
 /**
  * Test OM's snapshot provider service.
  */
+// HDDS-4440
+@Ignore
 public class TestOzoneManagerSnapshotProvider {
 
   private MiniOzoneOMHAClusterImpl cluster = null;

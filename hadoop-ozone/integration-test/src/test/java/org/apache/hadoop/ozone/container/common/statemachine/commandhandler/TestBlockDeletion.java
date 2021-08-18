@@ -154,6 +154,7 @@ public class TestBlockDeletion {
     FileUtils.deleteDirectory(baseDir);
   }
 
+  @Ignore
   @Test
   public void testBlockDeletion() throws Exception {
     String volumeName = UUID.randomUUID().toString();

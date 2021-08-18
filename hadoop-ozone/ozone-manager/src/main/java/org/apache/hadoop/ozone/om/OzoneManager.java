@@ -110,6 +110,7 @@ import org.apache.hadoop.ozone.om.exceptions.OMException;
 import org.apache.hadoop.ozone.om.exceptions.OMException.ResultCodes;
 import org.apache.hadoop.ozone.om.exceptions.OMLeaderNotReadyException;
 import org.apache.hadoop.ozone.om.exceptions.OMNotLeaderException;
+import org.apache.hadoop.ozone.om.GrpcOzoneManagerServer.GrpcOzoneManagerServerConfig;
 import org.apache.hadoop.ozone.om.ha.OMHANodeDetails;
 import org.apache.hadoop.ozone.om.ha.OMNodeDetails;
 import org.apache.hadoop.ozone.om.helpers.DBUpdates;
@@ -282,6 +283,7 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
   private final Text omRpcAddressTxt;
   private final OzoneConfiguration configuration;
   private RPC.Server omRpcServer;
+  private GrpcOzoneManagerServer omS3gGrpcServer;    
   private InetSocketAddress omRpcAddress;
   private String omId;
 
@@ -321,6 +323,7 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
   private final SecurityConfig secConfig;
   private S3SecretManager s3SecretManager;
   private volatile boolean isOmRpcServerRunning = false;
+  private volatile boolean isOmGrpcServerRunning = false;    
   private String omComponent;
   private OzoneManagerProtocolServerSideTranslatorPB omServerProtocol;
 
@@ -523,6 +526,9 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
     omRpcAddress = updateRPCListenAddress(configuration,
         OZONE_OM_ADDRESS_KEY, omNodeRpcAddr, omRpcServer);
 
+    // Start S3g Om gRPC Server.
+    omS3gGrpcServer = getOmS3gGrpcServer(configuration);
+    
     shutdownHook = () -> {
       saveOmMetrics();
     };
@@ -935,6 +941,20 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
     return rpcServer;
   }
 
+  /**
+   * Starts an s3g OmGrpc server.
+   *
+   * @param conf         configuration
+   * @return gRPC server
+   * @throws IOException if there is an I/O error while creating RPC server
+   */
+  private GrpcOzoneManagerServer startGrpcServer(OzoneConfiguration conf)
+          throws IOException {
+    return new GrpcOzoneManagerServer(conf.getObject(
+            GrpcOzoneManagerServerConfig.class),
+            this.omServerProtocol);
+  }
+
   private static boolean isOzoneSecurityEnabled() {
     return securityEnabled;
   }
@@ -1216,6 +1236,9 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
 
     startTrashEmptier(configuration);
 
+    omS3gGrpcServer.start();
+    isOmGrpcServerRunning = true;
+    
     registerMXBean();
 
     startJVMPauseMonitor();
@@ -1266,6 +1289,8 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
 
     omRpcServer = getRpcServer(configuration);
 
+    omS3gGrpcServer = getOmS3gGrpcServer(configuration);
+    
     try {
       httpServer = new OzoneManagerHttpServer(configuration, this);
       httpServer.start();
@@ -1279,6 +1304,9 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
     startTrashEmptier(configuration);
     registerMXBean();
 
+    omS3gGrpcServer.start();
+    isOmGrpcServerRunning = true;
+    
     startJVMPauseMonitor();
     setStartTime();
     omState = State.RUNNING;
@@ -1346,6 +1374,19 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
     return startRpcServer(configuration, omNodeRpcAddr,
         OzoneManagerProtocolPB.class, omService,
         handlerCount);
+  }
+
+  /**
+   * Creates a new instance of gRPC OzoneManagerServiceGrpc transport server
+   * for serving s3g OmRequests.  If an earlier instance is already running
+   * then returns the same.
+   */
+  private GrpcOzoneManagerServer getOmS3gGrpcServer(OzoneConfiguration conf)
+      throws IOException {
+    if (isOmGrpcServerRunning) {
+      return omS3gGrpcServer;
+    }
+    return startGrpcServer(configuration);
   }
 
   /**
@@ -1428,6 +1469,7 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
         scheduleOMMetricsWriteTask = null;
       }
       omRpcServer.stop();
+      omS3gGrpcServer.stop();      
       // When ratis is not enabled, we need to call stop() to stop
       // OzoneManageDoubleBuffer in OM server protocol.
       if (!isRatisEnabled) {
@@ -1438,6 +1480,7 @@ public final class OzoneManager extends ServiceRuntimeInfoImpl
         omRatisServer = null;
       }
       isOmRpcServerRunning = false;
+      isOmGrpcServerRunning = false;      
       keyManager.stop();
       stopSecretManager();
       if (httpServer != null) {

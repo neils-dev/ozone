@@ -74,10 +74,14 @@ import picocli.CommandLine.ParameterException;
 import picocli.CommandLine.ParseResult;
 import picocli.CommandLine.RunLast;
 
+// HDDS-4440
+import org.junit.Ignore;
+
 /**
  * This class tests Ozone sh shell command.
  * Inspired by TestS3Shell
  */
+@Ignore
 public class TestOzoneShellHA {
 
   private static final Logger LOG =

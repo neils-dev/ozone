@@ -55,11 +55,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
+// HDDS-4440
+import org.junit.jupiter.api.Disabled;
 
 /**
  * Tests the Ratis snapshot feature in SCM.
  */
 @Timeout(500)
+// HDDS-4440
+@Disabled
 public class TestSCMInstallSnapshotWithHA {
 
   private MiniOzoneHAClusterImpl cluster = null;
@@ -116,6 +120,7 @@ public class TestSCMInstallSnapshotWithHA {
     }
   }
 
+  // HDDS-4440
   @Test
   public void testInstallSnapshot() throws Exception {
     // Get the leader SCM

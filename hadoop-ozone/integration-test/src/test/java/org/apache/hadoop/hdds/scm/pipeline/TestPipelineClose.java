@@ -48,6 +48,7 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
@@ -203,6 +204,7 @@ public class TestPipelineClose {
     }
   }
 
+  @Ignore
   @Test
   public void testPipelineCloseWithLogFailure() throws IOException {
 

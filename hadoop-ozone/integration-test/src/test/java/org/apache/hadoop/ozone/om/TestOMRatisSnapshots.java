@@ -51,10 +51,14 @@ import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
+// HDDS-4440
+import org.junit.jupiter.api.Disabled;
 /**
  * Tests the Ratis snaphsots feature in OM.
  */
 @Timeout(500)
+// HDDS-4440
+@Disabled
 public class TestOMRatisSnapshots {
 
   private MiniOzoneOMHAClusterImpl cluster = null;

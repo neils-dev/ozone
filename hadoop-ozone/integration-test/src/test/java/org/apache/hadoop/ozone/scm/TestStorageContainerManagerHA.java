@@ -53,6 +53,8 @@ import org.apache.hadoop.ozone.MiniOzoneCluster;
 import org.junit.Rule;
 
 import org.junit.rules.Timeout;
+//HDDS-4440
+import org.junit.Ignore;
 
 import java.io.IOException;
 
@@ -63,6 +65,8 @@ import static org.apache.hadoop.hdds.client.ReplicationType.STAND_ALONE;
 /**
  * Base class for Ozone Manager HA tests.
  */
+// HDDS-4440
+@Ignore
 public class TestStorageContainerManagerHA {
 
   private MiniOzoneHAClusterImpl cluster = null;
