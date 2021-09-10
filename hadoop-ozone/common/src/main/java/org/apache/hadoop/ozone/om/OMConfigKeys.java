@@ -281,4 +281,9 @@ public final class OMConfigKeys {
   public static final boolean OZONE_OM_S3_GRPC_SERVER_ENABLED_DEFAULT =
       false;
 
+  public static final String OZONE_OM_GRPC_MAXIMUM_RESPONSE_LENGTH =
+      "ozone.om.grpc.maximum.response.length";
+  /** Default value for GRPC_MAXIMUM_RESPONSE_LENGTH. */
+  public static final int OZONE_OM_GRPC_MAXIMUM_RESPONSE_LENGTH_DEFAULT =
+      128 * 1024 * 1024;
 }
