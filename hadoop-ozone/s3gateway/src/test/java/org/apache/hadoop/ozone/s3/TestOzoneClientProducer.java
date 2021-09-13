@@ -18,9 +18,6 @@
 package org.apache.hadoop.ozone.s3;
 
 import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.UriInfo;
 import java.util.Arrays;
 import java.util.Collection;
 
@@ -33,7 +30,6 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-import org.mockito.Mockito;
 
 /**
  * Test class for @{@link OzoneClientProducer}.
@@ -42,31 +38,13 @@ import org.mockito.Mockito;
 public class TestOzoneClientProducer {
 
   private OzoneClientProducer producer;
-  private MultivaluedMap<String, String> headerMap;
-  private MultivaluedMap<String, String> queryMap;
-  private String authHeader;
-  private String contentMd5;
-  private String host;
-  private String amzContentSha256;
-  private String date;
-  private String contentType;
-  private UriInfo uriInfo;
 
   public TestOzoneClientProducer(
       String authHeader, String contentMd5,
       String host, String amzContentSha256, String date, String contentType
   )
       throws Exception {
-    this.authHeader = authHeader;
-    this.contentMd5 = contentMd5;
-    this.host = host;
-    this.amzContentSha256 = amzContentSha256;
-    this.date = date;
-    this.contentType = contentType;
     producer = new OzoneClientProducer();
-    headerMap = new MultivaluedHashMap<>();
-    queryMap = new MultivaluedHashMap<>();
-    uriInfo = Mockito.mock(UriInfo.class);
     OzoneConfiguration config = new OzoneConfiguration();
     config.setBoolean(OzoneConfigKeys.OZONE_SECURITY_ENABLED_KEY, true);
     config.set(OMConfigKeys.OZONE_OM_ADDRESS_KEY, "");

@@ -125,8 +125,8 @@ public final class StringToSignProducer {
       Map<String, String[]> queryParameters
   ) {
     Map<String, String> result = new HashMap<>();
-    for (String key : queryParameters.keySet()) {
-      result.put(key, queryParameters.get(key)[0]);
+    for (Map.Entry<String, String[]> entry : queryParameters.entrySet()) {
+      result.put(entry.getKey(), entry.getValue()[0]);
     }
     return result;
   }
