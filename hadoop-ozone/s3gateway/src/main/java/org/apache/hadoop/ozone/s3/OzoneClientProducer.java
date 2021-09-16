@@ -17,8 +17,8 @@
  */
 package org.apache.hadoop.ozone.s3;
 
-import javax.annotation.PreDestroy;
-import javax.enterprise.context.ApplicationScoped;
+//import javax.annotation.PreDestroy;
+//import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.RequestScoped;
 import javax.enterprise.inject.Produces;
 import javax.inject.Inject;
@@ -42,48 +42,6 @@ import static org.apache.hadoop.ozone.s3.exception
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-@ApplicationScoped
-final class OzoneClientCache {
-  private static final Logger LOG =
-      LoggerFactory.getLogger(OzoneClientCache.class);
-  // single, cached OzoneClient established on first connection
-  // for s3g gRPC OmTransport, OmRequest - OmResponse channel
-  private static OzoneClientCache instance;
-  private OzoneClient client;
-
-  private OzoneClientCache(String omServiceID,
-                           OzoneConfiguration
-                               ozoneConfiguration) throws IOException {
-    try {
-      if (omServiceID == null) {
-        client = OzoneClientFactory.getRpcClient(ozoneConfiguration);
-      } else {
-        // As in HA case, we need to pass om service ID.
-        client = OzoneClientFactory.getRpcClient(omServiceID,
-            ozoneConfiguration);
-      }
-    } catch (IOException e) {
-      LOG.warn("cannot create OzoneClient");
-      throw e;
-    }
-  }
-
-  public static OzoneClient getOzoneClientInstance(String omServiceID,
-                                                   OzoneConfiguration
-                                                       ozoneConfiguration)
-      throws IOException {
-    if (instance == null) {
-      instance = new OzoneClientCache(omServiceID, ozoneConfiguration);
-    }
-    return instance.client;
-  }
-
-  @PreDestroy
-  public void destroy() throws IOException {
-    client.close();
-  }
-}
 
 /**
  * This class creates the OzoneClient for the Rest endpoints.
@@ -115,14 +73,6 @@ public class OzoneClientProducer {
       IOException {
     client = getClient(ozoneConfiguration);
     return client;
-  }
-
-  @Produces
-  public UserGroupInformation createUgi() {
-    if (remoteUser == null) {
-      client = getClient(ozoneConfiguration);
-    }
-    return remoteUser;
   }
 
   private OzoneClient getClient(OzoneConfiguration config)
