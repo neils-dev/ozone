@@ -32,6 +32,7 @@ import org.apache.hadoop.hdds.conf.ConfigGroup;
 import org.apache.hadoop.hdds.conf.ConfigTag;
 import org.apache.hadoop.hdds.conf.ConfigurationSource;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.ozone.OzoneSecurityUtil;
 import org.apache.hadoop.ozone.om.exceptions.OMException;
 import org.apache.hadoop.ozone.om.exceptions.OMException.ResultCodes;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos;
@@ -49,6 +50,10 @@ import io.grpc.netty.NettyChannelBuilder;
 import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.grpc.netty.GrpcSslContexts;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 
 import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_ADDRESS_KEY;
 import static org.apache.hadoop.ozone.om.OMConfigKeys
@@ -77,6 +82,7 @@ public class GrpcOmTransport implements OmTransport {
   private String host = "om";
   private int port = 8981;
   private int maxSize;
+  private boolean secureConnection = false;
 
   public GrpcOmTransport(ConfigurationSource conf,
                           UserGroupInformation ugi, String omServiceId)
@@ -84,7 +90,7 @@ public class GrpcOmTransport implements OmTransport {
     Optional<String> omHost = getHostNameFromConfigKeys(conf,
         OZONE_OM_ADDRESS_KEY);
     this.host = omHost.orElse("0.0.0.0");
-
+    this.secureConnection = OzoneSecurityUtil.isSecurityEnabled(conf);
     port = conf.getObject(GrpcOmTransportConfig.class).getPort();
 
     maxSize = conf.getInt(OZONE_OM_GRPC_MAXIMUM_RESPONSE_LENGTH,
@@ -103,6 +109,19 @@ public class GrpcOmTransport implements OmTransport {
             .usePlaintext()
             .maxInboundMessageSize(maxSize);
 
+    if (secureConnection) {
+      try {
+        SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient()
+            .trustManager(InsecureTrustManagerFactory.INSTANCE);
+        channelBuilder.useTransportSecurity().
+            sslContext(sslContextBuilder.build());
+        LOG.info("******* Grpc Created TLS client connection *******");
+      } catch (Exception ex) {
+        LOG.error("cannot establish TLS for grpc om transport client");
+      }
+    } else {
+      channelBuilder.usePlaintext();
+    }
     channel = channelBuilder.build();
     client = OzoneManagerServiceGrpc.newBlockingStub(channel);
 

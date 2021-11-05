@@ -25,12 +25,22 @@ import org.apache.hadoop.hdds.conf.ConfigGroup;
 import org.apache.hadoop.hdds.conf.ConfigTag;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.ozone.OzoneConsts;
+import org.apache.hadoop.ozone.OzoneSecurityUtil;
 import org.apache.hadoop.ozone.protocolPB.OzoneManagerProtocolServerSideTranslatorPB;
 import org.apache.hadoop.ozone.security.OzoneDelegationTokenSecretManager;
 import io.grpc.Server;
 import io.grpc.netty.NettyServerBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.grpc.netty.GrpcSslContexts;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
+import org.apache.hadoop.hdds.security.x509.SecurityConfig;
+import org.apache.hadoop.hdds.security.x509.certificate.client.CertificateClient;
+
+import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_GRPC_TLS_PROVIDER;
+import static org.apache.hadoop.hdds.HddsConfigKeys.HDDS_GRPC_TLS_PROVIDER_DEFAULT;
 
 /**
  * Separated network server for gRPC transport OzoneManagerService s3g->OM.
@@ -46,23 +56,42 @@ public class GrpcOzoneManagerServer {
                                 OzoneManagerProtocolServerSideTranslatorPB
                                     omTranslator,
                                 OzoneDelegationTokenSecretManager
-                                    delegationTokenMgr) {
+                                    delegationTokenMgr,
+                                CertificateClient caClient) {
     this.port = config.getObject(
         GrpcOzoneManagerServerConfig.class).
         getPort();
     init(omTranslator,
         delegationTokenMgr,
-        config);
+        config,
+        caClient);
   }
 
   public void init(OzoneManagerProtocolServerSideTranslatorPB omTranslator,
                    OzoneDelegationTokenSecretManager delegationTokenMgr,
-                   OzoneConfiguration omServerConfig) {
+                   OzoneConfiguration omServerConfig,
+                   CertificateClient caClient) {
     NettyServerBuilder nettyServerBuilder = NettyServerBuilder.forPort(port)
         .maxInboundMessageSize(OzoneConsts.OZONE_SCM_CHUNK_MAX_SIZE)
         .addService(new OzoneManagerServiceGrpc(omTranslator,
             delegationTokenMgr,
             omServerConfig));
+
+    if (OzoneSecurityUtil.isSecurityEnabled(omServerConfig)) {
+      try {
+        SecurityConfig secConf = new SecurityConfig(omServerConfig);
+        SslContextBuilder sslClientContextBuilder = SslContextBuilder.forServer(
+            caClient.getPrivateKey(), caClient.getCertificate());
+        SslContextBuilder sslContextBuilder = GrpcSslContexts.configure(
+            sslClientContextBuilder,
+            SslProvider.valueOf(omServerConfig.get(HDDS_GRPC_TLS_PROVIDER,
+                HDDS_GRPC_TLS_PROVIDER_DEFAULT)));
+        nettyServerBuilder.sslContext(sslContextBuilder.build());
+        LOG.info("******* Grpc Created TLS server connection *******");
+      } catch (Exception ex) {
+        LOG.error("Unable to setup TLS for secure Om S3g GRPC channel.", ex);
+      }
+    }
 
     server = nettyServerBuilder.build();
   }
