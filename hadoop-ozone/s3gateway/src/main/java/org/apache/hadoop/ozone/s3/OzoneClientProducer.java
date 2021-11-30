@@ -59,7 +59,7 @@ public class OzoneClientProducer {
   private static final Logger LOG =
       LoggerFactory.getLogger(OzoneClientProducer.class);
 
-  private OzoneClient client;
+  private static OzoneClient client;
 
   @Inject
   private SignatureProcessor signatureProcessor;
@@ -77,15 +77,18 @@ public class OzoneClientProducer {
   private ContainerRequestContext context;
 
   @Produces
-  public OzoneClient createClient() throws WebApplicationException,
-      IOException {
-    client = getClient(ozoneConfiguration);
+  public OzoneClient createClient() throws WebApplicationException, IOException {
+  synchronized(LOG) {
+    if (client == null) {
+      client = getClient(ozoneConfiguration);
+    }
+  }
     return client;
   }
 
   @PreDestroy
   public void destroy() throws IOException {
-    client.close();
+    //client.close();
   }
 
   private OzoneClient getClient(OzoneConfiguration config)
