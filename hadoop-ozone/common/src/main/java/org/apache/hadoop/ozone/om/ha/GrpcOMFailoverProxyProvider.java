@@ -83,9 +83,6 @@ public class GrpcOMFailoverProxyProvider<T> extends
         if (nodeId == null) {
           nodeId = OzoneConsts.OM_DEFAULT_NODE_ID;
         }
-        if (nodeId == null) {
-            nodeId = OzoneConsts.OM_DEFAULT_NODE_ID;
-        }
         omProxies.put(nodeId, null);
         if (hostaddr.isPresent()) {
           omAddresses.put(nodeId,
@@ -99,7 +96,6 @@ public class GrpcOMFailoverProxyProvider<T> extends
               "0.0.0.0:" + getNumberFromConfigKeys(config,
                   OMConfigKeys.OZONE_OM_GRPC_PORT_KEY));
         }
-        //omProxyInfos.put(nodeId, null);
         omNodeIDList.add(nodeId);
       }
     }

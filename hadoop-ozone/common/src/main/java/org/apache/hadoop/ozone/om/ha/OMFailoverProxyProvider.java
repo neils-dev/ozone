@@ -565,20 +565,8 @@ public class OMFailoverProxyProvider<T> implements
     this.omNodeIDList = omNodeIDList;
   }
 
-  protected Map<String, ProxyInfo<T>> getOmProxies() {
-    return omProxies;
-  }
-
-  protected Map<String, OMProxyInfo> getOmProxyInfos() {
-    return omProxyInfos;
-  }
-
   protected List<String> getOmNodeIDList() {
     return omNodeIDList;
-  }
-
-  protected synchronized int getProxyIndex() {
-    return currentProxyIndex;
   }
 
 }

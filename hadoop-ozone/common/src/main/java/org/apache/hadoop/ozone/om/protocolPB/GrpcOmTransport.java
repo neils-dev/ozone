@@ -138,17 +138,6 @@ public class GrpcOmTransport implements OmTransport {
     start();
   }
 
-  public static OptionalInt getNumberFromConfigKeys(
-      ConfigurationSource conf, String... keys) {
-    for (final String key : keys) {
-      final String value = conf.getTrimmed(key);
-      if (value != null) {
-        return OptionalInt.of(Integer.parseInt(value));
-      }
-    }
-    return OptionalInt.empty();
-  }
-
   public void start() {
     if (!isRunning.compareAndSet(false, true)) {
       LOG.info("Ignore. already started.");
@@ -223,14 +212,15 @@ public class GrpcOmTransport implements OmTransport {
           resultCode = ResultCodes.TIMEOUT;
         }
         Exception exp = new Exception(e);
-        if (exp.getCause() instanceof io.grpc.StatusRuntimeException) {
+        /*if (exp.getCause() instanceof io.grpc.StatusRuntimeException) {
           io.grpc.StatusRuntimeException srexp = (io.grpc.StatusRuntimeException)exp.getCause();
           io.grpc.Status status = srexp.getStatus();
           LOG.info("** GRPC exception wrapped: "+status.getDescription());
         } else {
           LOG.info("***GRPC exception not StatusRuntimeException");
-        }
-        if (recoveredProxy.contains(omFailoverProxyProvider.getCurrentProxyOMNodeId())) {
+        }*/
+        if (recoveredProxy.contains(omFailoverProxyProvider
+            .getCurrentProxyOMNodeId())) {
           recoveredProxy.clear();
         }
         if (recoveredProxy.isEmpty()) {
@@ -287,13 +277,16 @@ public class GrpcOmTransport implements OmTransport {
         LOG.error("Retry request failed. " + action.reason, ex);
       } else {
         if (action.action == RetryPolicy.RetryAction.RetryDecision.RETRY ||
-            (action.action == RetryPolicy.RetryAction.RetryDecision.FAILOVER_AND_RETRY)) {
+            (action.action == RetryPolicy.RetryAction.RetryDecision
+                .FAILOVER_AND_RETRY)) {
           if (action.delayMillis > 0) {
             try {
               Thread.sleep(action.delayMillis);
             } catch (Exception e) {
+              LOG.error("Error trying sleep thread for {}", action.delayMillis);
             }
           }
+          // switch om host to current proxy OMNodeId
           host = omFailoverProxyProvider
               .getGrpcProxyAddress(
                   omFailoverProxyProvider.getCurrentProxyOMNodeId());
@@ -313,11 +306,15 @@ public class GrpcOmTransport implements OmTransport {
   }
 
   public void shutdown() {
-    channel.shutdown();
-    try {
-      channel.awaitTermination(5, TimeUnit.SECONDS);
-    } catch (Exception e) {
-      LOG.error("failed to shutdown OzoneManagerServiceGrpc channel", e);
+    for (Map.Entry<String, ManagedChannel> entry : channels.entrySet()) {
+      ManagedChannel channel = entry.getValue();
+      channel.shutdown();
+      try {
+        channel.awaitTermination(5, TimeUnit.SECONDS);
+      } catch (Exception e) {
+        LOG.error("failed to shutdown OzoneManagerServiceGrpc channel {} : {}",
+            entry.getKey(), e);
+      }
     }
   }
 
