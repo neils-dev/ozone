@@ -17,6 +17,12 @@
  */
 package org.apache.hadoop.ozone.om;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+import io.grpc.protobuf.StatusProto;
+//import com.google.rpc.ErrorInfo;
+import io.grpc.Metadata;
+
 import com.google.protobuf.RpcController;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.hdds.security.x509.SecurityConfig;
@@ -126,23 +132,48 @@ public class OzoneManagerServiceGrpc extends OzoneManagerServiceImplBase {
       omResponse =
           UserGroupInformation.getCurrentUser().doAs(
               (PrivilegedExceptionAction<OMResponse>) () -> {
-                try {
+                //try {
                   return this.omTranslator.
                       submitRequest(NULL_RPC_CONTROLLER, request);
-                } catch (Throwable se) {
-                  Throwable e = se.getCause();
+                /*} catch (Throwable se) {
+                  LOG.info("**Grpc throw: {}", se);
+                  //Throwable e = se.getCause();
+                  // to throw , capture original serviceexception for HA retry
+                  Throwable e = se;
+                  LOG.info("**Grpc throw cause: {}", e);
                   if (e == null) {
                     throw new IOException(se);
+                  } else if (e instance of ServiceException) {
+
+                    responseObserver.onError();
                   } else {
                     throw e instanceof IOException ?
                         (IOException) e : new IOException(se);
                   }
-                }
+                }*/
               });
     } catch (Throwable e) {
+      IOException ex = new IOException(e.getCause());
+      LOG.info("**Grpc createErrorResponse: {}", ex.getMessage());
+      /*omResponse = createErrorResponse(
+          request,
+          new IOException(e));
+      com.google.rpc.Status status = com.google.rpc.Status.newBuilder()
+          .setMessage("OzoneManagerServiceGrpc: failover exception")
+          .addDetails(Any.pack(ErrorInfo.newBuilder()
+              .setReason("OzoneManagerServiceGrpc: failover exception")
+              .putMetadata("exception", e.getMessage())
+              .build()))
+          .build();*/
+
       omResponse = createErrorResponse(
           request,
           new IOException(e));
+      responseObserver.onError(Status
+          .INTERNAL
+          .withDescription(ex.getMessage())
+          .asRuntimeException());
+      //responseObserver.onError(StatusProto.toStatusRuntimeException(status));
     }
     responseObserver.onNext(omResponse);
     responseObserver.onCompleted();
@@ -165,6 +196,7 @@ public class OzoneManagerServiceGrpc extends OzoneManagerServiceImplBase {
     if (exception.getMessage() != null) {
       omResponse.setMessage(exception.getMessage());
     }
+    LOG.info("**Grpc createErrorMessage:setMessage : {}", omResponse.getMessage());
     return omResponse.build();
   }
 }
