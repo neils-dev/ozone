@@ -100,12 +100,12 @@ public class GrpcOMFailoverProxyProvider<T> extends
       }
     }
 
-    if (omProxyInfos.size() == 0) {
+/*    if (omProxyInfos.size() == 0) {
       omProxyInfos.put(OzoneConsts.OM_DEFAULT_NODE_ID,
           "0.0.0.0:" + getNumberFromConfigKeys(config,
               OMConfigKeys.OZONE_OM_GRPC_PORT_KEY));
       omNodeIDList.add(OzoneConsts.OM_DEFAULT_NODE_ID);
-    }
+    }*/
     if (omProxies.isEmpty()) {
       throw new IllegalArgumentException("Could not find any configured " +
           "addresses for OM. Please configure the system with "

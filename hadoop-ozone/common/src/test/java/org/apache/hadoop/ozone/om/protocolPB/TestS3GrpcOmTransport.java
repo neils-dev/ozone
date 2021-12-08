@@ -22,18 +22,20 @@ import static org.apache.hadoop.ozone.ClientVersions.CURRENT_VERSION;
 import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Mockito.mock;
 
+import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.testing.GrpcCleanupRule;
 
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
+import org.apache.hadoop.ozone.om.exceptions.OMNotLeaderException;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerServiceGrpc;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos.OMRequest;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos.OMResponse;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos.ServiceListRequest;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos.Type;
-import org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos.Status;
+//import org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos.Status;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -42,6 +44,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.grpc.ManagedChannel;
+
+import com.google.protobuf.ServiceException;
+import org.apache.ratis.protocol.RaftPeerId;
+
+import java.io.IOException;
 
 import static org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos.Status.OK;
 
@@ -59,10 +66,24 @@ public class TestS3GrpcOmTransport {
 
   private final OMResponse omResponse = OMResponse.newBuilder()
                   .setSuccess(true)
-                  .setStatus(Status.OK)
+                  .setStatus(org.apache.hadoop.ozone.protocol
+                      .proto.OzoneManagerProtocolProtos.Status.OK)
                   .setLeaderOMNodeId(leaderOMNodeId)
                   .setCmdType(Type.AllocateBlock)
                   .build();
+
+  private boolean doFailover = false;
+
+  private ServiceException createNotLeaderException() {
+    RaftPeerId raftPeerId = RaftPeerId.getRaftPeerId("testid");
+
+    // TODO: Set suggest leaderID. Right now, client is not using suggest
+    // leaderID. Need to fix this.
+    OMNotLeaderException notLeaderException =
+        new OMNotLeaderException(raftPeerId);
+    LOG.debug(notLeaderException.getMessage());
+    return new ServiceException(notLeaderException);
+  }
 
   private final OzoneManagerServiceGrpc.OzoneManagerServiceImplBase
       serviceImpl =
@@ -78,11 +99,21 @@ public class TestS3GrpcOmTransport {
                                               .OzoneManagerProtocolProtos
                                               .OMResponse>
                                           responseObserver) {
-                  responseObserver.onNext(omResponse);
-                  responseObserver.onCompleted();
-                }
-
-              }));
+                  try {
+                    if (doFailover == true) {
+                      doFailover = false;
+                      throw createNotLeaderException();
+                    } else {
+                      responseObserver.onNext(omResponse);
+                      responseObserver.onCompleted();
+                    }
+                  } catch (Throwable e) {
+                    IOException ex = new IOException(e.getCause());
+                    responseObserver.onError(io.grpc.Status
+                        .INTERNAL
+                        .withDescription(ex.getMessage())
+                        .asRuntimeException());
+              }}}));
 
   private GrpcOmTransport client;
 
@@ -109,6 +140,7 @@ public class TestS3GrpcOmTransport {
     UserGroupInformation ugi = UserGroupInformation.getCurrentUser();
     client = new GrpcOmTransport(conf, ugi, omServiceId);
     client.startClient(channel);
+    doFailover = false;
   }
 
   @Test
@@ -123,7 +155,29 @@ public class TestS3GrpcOmTransport {
         .build();
 
     final OMResponse resp = client.submitRequest(omRequest);
-    Assert.assertEquals(resp.getStatus(), OK);
+    Assert.assertEquals(resp.getStatus(), org.apache.hadoop.ozone.protocol
+        .proto.OzoneManagerProtocolProtos.Status.OK);
+    Assert.assertEquals(resp.getLeaderOMNodeId(), leaderOMNodeId);
+  }
+
+  @Test
+  public void testGrpcFailoverProxy() throws Exception {
+    ServiceListRequest req = ServiceListRequest.newBuilder().build();
+
+    final OMRequest omRequest = OMRequest.newBuilder()
+        .setCmdType(Type.ServiceList)
+        .setVersion(CURRENT_VERSION)
+        .setClientId("test")
+        .setServiceListRequest(req)
+        .build();
+
+    doFailover = true;
+    // first invocation generates a NotALeaderException
+    // failover is performed and request is internally retried
+    // second invocation request to server succeeds
+    final OMResponse resp = client.submitRequest(omRequest);
+    Assert.assertEquals(resp.getStatus(), org.apache.hadoop.ozone.protocol
+        .proto.OzoneManagerProtocolProtos.Status.OK);
     Assert.assertEquals(resp.getLeaderOMNodeId(), leaderOMNodeId);
   }
 }

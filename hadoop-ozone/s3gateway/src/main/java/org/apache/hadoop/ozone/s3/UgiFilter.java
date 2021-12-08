@@ -129,7 +129,8 @@ public class UgiFilter implements Filter {
       Token<OzoneTokenIdentifier> token = new Token(identifier.getBytes(),
           identifier.getSignature().getBytes(StandardCharsets.UTF_8),
           identifier.getKind(),
-          omService);
+          null);
+//          omService);
       remoteUser.addToken(token);
     }
     try {

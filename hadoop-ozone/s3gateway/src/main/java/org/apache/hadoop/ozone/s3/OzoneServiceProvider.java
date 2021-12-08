@@ -73,8 +73,13 @@ public class OzoneServiceProvider {
           throw new IllegalArgumentException(OZONE_OM_NODES_KEY
               + "." + serviceId + " is not defined");
         }
-        omServiceAddr = new Text(OzoneS3Util.buildServiceNameForToken(conf,
-            serviceId, omNodeIds));
+        // CODE NEEDS TO BE REMOVED, NOT USING TOKENS
+        try {
+          omServiceAddr = new Text(OzoneS3Util.buildServiceNameForToken(conf,
+              serviceId, omNodeIds));
+        } catch (Exception e) {
+          omServiceAddr = new Text();
+        }
         omserviceID = serviceId;
       }
     }
