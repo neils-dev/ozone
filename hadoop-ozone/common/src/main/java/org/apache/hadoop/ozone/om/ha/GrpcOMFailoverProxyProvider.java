@@ -40,6 +40,13 @@ import java.util.OptionalInt;
 import static org.apache.hadoop.hdds.HddsUtils.getHostNameFromConfigKeys;
 import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_ADDRESS_KEY;
 
+/**
+ * The Grpc s3gateway om transport failover proxy provider implementation
+ * extending the ozone client OM failover proxy provider.  This implmentation
+ * allows the Grpc OMTransport reuse OM failover retry policies and
+ * getRetryAction methods.  In case of OM failover, client can try
+ * connecting to another OM node from the list of proxies.
+ */
 public class GrpcOMFailoverProxyProvider<T> extends
     OMFailoverProxyProvider<T> {
 
@@ -54,7 +61,7 @@ public class GrpcOMFailoverProxyProvider<T> extends
 
   @Override
   protected void loadOMClientConfigs(ConfigurationSource config, String omSvcId)
-    throws IOException {
+      throws IOException {
     Map omProxies = new HashMap<>();
     Map omProxyInfos = new HashMap<>();
     List omNodeIDList = new ArrayList<>();
@@ -115,9 +122,9 @@ public class GrpcOMFailoverProxyProvider<T> extends
 
   // need to throw if nodeID not in omAddresses
   public String getGrpcProxyAddress(String nodeId) throws IOException {
-    if (omAddresses.containsKey(nodeId))
+    if (omAddresses.containsKey(nodeId)) {
       return omAddresses.get(nodeId);
-    else {
+    } else {
       LOG.error("expected nodeId not found in omAddresses for proxyhost {}",
           nodeId);
       throw new IOException(

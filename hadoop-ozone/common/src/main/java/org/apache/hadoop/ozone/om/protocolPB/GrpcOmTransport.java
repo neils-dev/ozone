@@ -25,33 +25,23 @@ import java.lang.reflect.Constructor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalInt;
 
 import com.google.common.net.HostAndPort;
-import com.google.protobuf.ServiceException;
 import io.grpc.Status;
-
-import io.grpc.StatusRuntimeException;
 import org.apache.hadoop.ipc.RemoteException;
 
-import org.apache.hadoop.hdds.HddsUtils;
 import org.apache.hadoop.hdds.conf.Config;
 import org.apache.hadoop.hdds.conf.ConfigGroup;
 import org.apache.hadoop.hdds.conf.ConfigTag;
 import org.apache.hadoop.hdds.conf.ConfigurationSource;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.retry.RetryPolicy;
-import org.apache.hadoop.ozone.OmUtils;
 import org.apache.hadoop.ozone.OzoneConfigKeys;
 import org.apache.hadoop.ozone.OzoneConsts;
-import org.apache.hadoop.ozone.ha.ConfUtils;
-import org.apache.hadoop.ozone.om.OMConfigKeys;
 import org.apache.hadoop.ozone.om.exceptions.OMException;
 import org.apache.hadoop.ozone.om.exceptions.OMException.ResultCodes;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos;
@@ -62,6 +52,7 @@ import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.security.UserGroupInformation;
 
+import org.apache.hadoop.ozone.om.ha.GrpcOMFailoverProxyProvider;
 import org.apache.hadoop.ozone.protocol.proto.OzoneManagerServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.netty.NettyChannelBuilder;
@@ -70,16 +61,8 @@ import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.hadoop.ozone.om.ha.GrpcOMFailoverProxyProvider;
-import org.apache.hadoop.io.retry.RetryPolicies;
-import org.apache.hadoop.io.retry.RetryPolicy;
-import org.apache.hadoop.io.retry.RetryPolicy.RetryAction.RetryDecision;
-
-import static org.apache.hadoop.ozone.protocol.proto.OzoneManagerProtocolProtos.Status.OK;
-import static org.apache.hadoop.hdds.HddsUtils.getHostNameFromConfigKeys;
 import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_GRPC_MAXIMUM_RESPONSE_LENGTH;
 import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_GRPC_MAXIMUM_RESPONSE_LENGTH_DEFAULT;
-import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_SERVICE_IDS_KEY;
 import static org.apache.hadoop.ozone.protocol.proto
     .OzoneManagerProtocolProtos.OMTokenProto.Type.S3AUTHINFO;
 
@@ -94,8 +77,6 @@ public class GrpcOmTransport implements OmTransport {
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
   // gRPC specific
-  private ManagedChannel channel;
-
   private OzoneManagerServiceGrpc.OzoneManagerServiceBlockingStub client;
   private Map<String,
       OzoneManagerServiceGrpc.OzoneManagerServiceBlockingStub> clients;
@@ -159,6 +140,7 @@ public class GrpcOmTransport implements OmTransport {
         OzoneConfigKeys.OZONE_CLIENT_FAILOVER_MAX_ATTEMPTS_KEY,
         OzoneConfigKeys.OZONE_CLIENT_FAILOVER_MAX_ATTEMPTS_DEFAULT);
 
+
     retryPolicy = omFailoverProxyProvider.getRetryPolicy(maxFailovers);
     LOG.info("{}: started", CLIENT_NAME);
   }
@@ -205,9 +187,9 @@ public class GrpcOmTransport implements OmTransport {
           resultCode = ResultCodes.TIMEOUT;
         }
         Exception exp = new Exception(e);
-          tryOtherHost = shouldRetry(unwrapException(exp));
-          if (tryOtherHost == false) {
-            throw new OMException(resultCode);
+        tryOtherHost = shouldRetry(unwrapException(exp));
+        if (!tryOtherHost) {
+          throw new OMException(resultCode);
         }
       }
     }
@@ -217,7 +199,8 @@ public class GrpcOmTransport implements OmTransport {
   private Exception unwrapException(Exception ex) {
     Exception grpcException = null;
     try {
-      io.grpc.StatusRuntimeException srexp = (io.grpc.StatusRuntimeException)ex.getCause();
+      io.grpc.StatusRuntimeException srexp =
+          (io.grpc.StatusRuntimeException)ex.getCause();
       io.grpc.Status status = srexp.getStatus();
       LOG.debug("GRPC exception wrapped: "+status.getDescription());
       if (status.getCode() == Status.Code.INTERNAL) {

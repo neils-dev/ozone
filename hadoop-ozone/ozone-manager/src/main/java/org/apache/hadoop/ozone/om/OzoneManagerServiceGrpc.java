@@ -18,7 +18,6 @@
 package org.apache.hadoop.ozone.om;
 
 import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import com.google.protobuf.RpcController;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.hdds.security.x509.SecurityConfig;
