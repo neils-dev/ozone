@@ -143,6 +143,13 @@ public class HddsVolume extends StorageVolume {
 
   }
 
+  public boolean deleteServiceDirPathExists() {
+    if (deleteServiceDirPath == null) {
+      return false;
+    }
+    return Files.exists(deleteServiceDirPath);
+  }
+
   @Override
   public void createWorkingDir(String workingDirName,
       MutableVolumeSet dbVolumeSet) throws IOException {
@@ -354,7 +361,19 @@ public class HddsVolume extends StorageVolume {
     }
   }
 
-  private void createTmpDir(String id) {
+
+  // Ensure that volume is initialized properly with
+  // cleanup path.  Should disk be re-inserted into
+  // cluster, cleanup path should already be on
+  // disk.  This method syncs the HddsVolume
+  // with the path on disk
+  public void checkCleanupDirs(String id) {
+    String tmpPath = createTmpPath(id);
+    String deleteServicePath = tmpPath + TMP_DELETE_SERVICE_DIR;
+    deleteServiceDirPath = Paths.get(deleteServicePath);
+  }
+
+  private String createTmpPath(String id) {
     StringBuilder stringBuilder = new StringBuilder();
 
     // HddsVolume root directory path
@@ -369,8 +388,12 @@ public class HddsVolume extends StorageVolume {
     stringBuilder.append(id);
     stringBuilder.append(TMP_DIR);
 
-    String tmpPath = stringBuilder.toString();
-    tmpDirPath = Paths.get(tmpPath);
+    return stringBuilder.toString();
+  }
+
+
+  private void createTmpDir(String id) {
+    tmpDirPath = Paths.get(createTmpPath(id));
 
     if (Files.notExists(tmpDirPath)) {
       try {
@@ -412,6 +435,12 @@ public class HddsVolume extends StorageVolume {
    * Delete all files under tmp/container_delete_service.
    */
   public synchronized void cleanTmpDir() {
+    if (getStorageState() != VolumeState.NORMAL) {
+      LOG.debug("Call to clean tmp dir container_delete_service directory "
+              + "for {} while VolumeState {}",
+              getStorageDir(), getStorageState().toString());
+      return;
+    }
     ListIterator<File> leftoversListIt = getDeleteLeftovers();
 
     while (leftoversListIt.hasNext()) {
