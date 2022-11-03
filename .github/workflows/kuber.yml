@@ -14,11 +14,9 @@
 # limitations under the License.
 name: kuber
 on:
-  push:
-  branches-ignore:
-    - kuber
+  push: # FIXME temporary
   schedule:
-    - cron: 30 0,12 * * *
+    - cron: 30 6 * * *
 env:
   FAIL_FAST: ${{ github.event_name == 'pull_request' }}
   MAVEN_OPTS: -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.http.retryHandler.class=standard -Dmaven.wagon.http.retryHandler.count=3
