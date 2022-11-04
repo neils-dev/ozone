@@ -17,6 +17,8 @@ on:
   pull_request:
     types: [opened, ready_for_review, synchronize]
   push:
+  branches-ignore:
+    - kuber
   schedule:
     - cron: 30 0,12 * * *
 env:
