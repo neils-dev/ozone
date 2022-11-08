@@ -16,6 +16,7 @@
  */
 package org.apache.hadoop.ozone.client;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.security.KeyPair;
 import java.security.PrivateKey;
@@ -24,6 +25,7 @@ import java.security.cert.CertStore;
 import java.security.cert.X509Certificate;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
@@ -31,6 +33,7 @@ import org.apache.hadoop.hdds.security.x509.SecurityConfig;
 import org.apache.hadoop.hdds.security.x509.certificate.client.CertificateClient;
 import org.apache.hadoop.hdds.security.x509.certificates.utils.CertificateSignRequest;
 import org.apache.hadoop.hdds.security.x509.certificates.utils.SelfSignedCertificate;
+import org.apache.hadoop.hdds.security.x509.crl.CRLInfo;
 import org.apache.hadoop.hdds.security.x509.exceptions.CertificateException;
 import org.apache.hadoop.hdds.security.x509.keys.HDDSKeyGenerator;
 
@@ -50,6 +53,11 @@ public class CertificateClientTestImpl implements CertificateClient {
   private final X509Certificate x509Certificate;
 
   public CertificateClientTestImpl(OzoneConfiguration conf) throws Exception {
+    this(conf, true);
+  }
+
+  public CertificateClientTestImpl(OzoneConfiguration conf, boolean rootCA)
+      throws Exception {
     securityConfig = new SecurityConfig(conf);
     HDDSKeyGenerator keyGen =
         new HDDSKeyGenerator(securityConfig.getConfiguration());
@@ -63,8 +71,10 @@ public class CertificateClientTestImpl implements CertificateClient {
             .setKey(keyPair)
             .setSubject("localhost")
             .setConfiguration(config)
-            .setScmID("TestScmId1")
-            .makeCA();
+            .setScmID("TestScmId1");
+    if (rootCA) {
+      builder.makeCA();
+    }
     X509CertificateHolder certificateHolder = null;
     certificateHolder = builder.build();
     x509Certificate = new JcaX509CertificateConverter().getCertificate(
@@ -174,13 +184,66 @@ public class CertificateClientTestImpl implements CertificateClient {
   }
 
   @Override
-  public String getSignatureAlgorithm(){
+  public String getSignatureAlgorithm() {
     return securityConfig.getSignatureAlgo();
   }
 
   @Override
-  public String getSecurityProvider(){
+  public String getSecurityProvider() {
     return securityConfig.getProvider();
+  }
+
+  @Override
+  public String getComponentName() {
+    return null;
+  }
+
+  @Override
+  public X509Certificate getRootCACertificate() {
+    return x509Certificate;
+  }
+
+  @Override
+  public void storeRootCACertificate(String pemEncodedCert, boolean force) {
+
+  }
+
+  @Override
+  public List<String> getCAList() {
+    return null;
+  }
+  @Override
+  public List<String> listCA() throws IOException  {
+    return null;
+  }
+
+  @Override
+  public List<String> updateCAList() throws IOException  {
+    return null;
+  }
+
+  @Override
+  public List<CRLInfo> getCrls(List<Long> crlIds) throws IOException {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public long getLatestCrlId() throws IOException {
+    return 0;
+  }
+
+  @Override
+  public long getLocalCrlId() {
+    return 0;
+  }
+
+  @Override
+  public void setLocalCrlId(long crlId) {
+  }
+
+  @Override
+  public boolean processCrl(CRLInfo crl) {
+    return false;
   }
 
 }
