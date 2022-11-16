@@ -39,6 +39,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hadoop.hdds.scm.ScmConfigKeys.OZONE_SCM_CONTAINER_PLACEMENT_IMPL_KEY;
+
 /**
  * Pipeline placement policy that choose datanodes based on load balancing
  * and network topology to supply pipeline creation.
@@ -240,6 +242,13 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
     if (checkAllNodesAreEqual(nodeManager.getClusterNetworkTopologyMap())) {
       return super.getResultSet(nodesRequired, healthyNodes);
     } else {
+      // check if scatter policy is configured for placement policy
+      // to be RackFaultTolerant
+      if (conf.get(OZONE_SCM_CONTAINER_PLACEMENT_IMPL_KEY)
+          .equals("org.apache.hadoop.hdds.scm.container.placement" +
+              ".algorithms.SCMContainerPlacementRackScatter")) {
+        return getResultSetScatter(nodesRequired, healthyNodes);
+      }
       // Since topology and rack awareness are available, picks nodes
       // based on them.
       return this.getResultSet(nodesRequired, healthyNodes);
@@ -262,13 +271,78 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
 
   /**
    * Get result set based on the pipeline placement algorithm which considers
-   * network topology and rack awareness.
+   * network topology and fault tolerance, scattering pipelines on separate
+   * racks.
    * @param nodesRequired - Nodes Required
    * @param healthyNodes - List of Nodes in the result set.
    * @return a list of datanodes
    * @throws SCMException SCMException
    */
-  @Override
+  public List<DatanodeDetails> getResultSetScatter(
+      int nodesRequired, List<DatanodeDetails> healthyNodes)
+      throws SCMException {
+    if (nodesRequired != HddsProtos.ReplicationFactor.THREE.getNumber()) {
+      throw new SCMException("Nodes required number is not supported: " +
+          nodesRequired, SCMException.ResultCodes.INVALID_CAPACITY);
+    }
+
+    List <DatanodeDetails> results = new ArrayList<>(nodesRequired);
+    List<DatanodeDetails> exclude = new ArrayList<>();
+    // First choose an anchor node.
+    DatanodeDetails anchor = chooseFirstNode(healthyNodes);
+    if (anchor != null) {
+      results.add(anchor);
+      removePeers(anchor, healthyNodes);
+      exclude.add(anchor);
+    } else {
+      LOG.warn("Unable to find healthy node for anchor(first) node.");
+      throw new SCMException("Unable to find anchor node.",
+          SCMException.ResultCodes.FAILED_TO_FIND_SUITABLE_NODE);
+    }
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("First node chosen: {}", anchor);
+    }
+
+    // Then choose nodes on separate racks in network topology.
+    // Fallback to random node pipeline placement.
+    int nodesToFind = nodesRequired - results.size();
+    for (int x = 0; x < nodesToFind; x++) {
+      DatanodeDetails pick = null;
+      pick = chooseNodeBasedOnRackScatter(
+          healthyNodes, exclude,
+          nodeManager.getClusterNetworkTopologyMap(), results);
+      // fall back protection
+      if (pick == null) {
+        pick = fallBackPickNodes(healthyNodes, exclude);
+        LOG.debug("Failed to choose node on separate rack based on " +
+                "topology. Fallback picks node as: {}", pick);
+      }
+
+      if (pick != null) {
+        results.add(pick);
+        removePeers(pick, healthyNodes);
+        exclude.add(pick);
+        LOG.debug("Remaining node chosen: {}", pick);
+      } else {
+        String msg = String.format("Unable to find suitable node in " +
+            "pipeline allocation. healthyNodes size: %d, " +
+            "excludeNodes size: %d", healthyNodes.size(), exclude.size());
+        LOG.warn(msg);
+        throw new SCMException(msg,
+            SCMException.ResultCodes.FAILED_TO_FIND_SUITABLE_NODE);
+      }
+    }
+
+    if (results.size() < nodesRequired) {
+      LOG.warn("Unable to find the required number of " +
+              "healthy nodes that  meet the criteria. Required nodes: {}, " +
+              "Found nodes: {}", nodesRequired, results.size());
+      throw new SCMException("Unable to find required number of nodes.",
+          SCMException.ResultCodes.FAILED_TO_FIND_SUITABLE_NODE);
+    }
+    return results;
+  }
+
   public List<DatanodeDetails> getResultSet(
       int nodesRequired, List<DatanodeDetails> healthyNodes)
       throws SCMException {
@@ -353,13 +427,14 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
 
     if (results.size() < nodesRequired) {
       LOG.warn("Unable to find the required number of " +
-              "healthy nodes that  meet the criteria. Required nodes: {}, " +
-              "Found nodes: {}", nodesRequired, results.size());
+          "healthy nodes that  meet the criteria. Required nodes: {}, " +
+          "Found nodes: {}", nodesRequired, results.size());
       throw new SCMException("Unable to find required number of nodes.",
           SCMException.ResultCodes.FAILED_TO_FIND_SUITABLE_NODE);
     }
     return results;
   }
+
 
   /**
    * Find a node from the healthy list and return it after removing it from the
@@ -426,6 +501,38 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
         p -> !excludedNodes.contains(p)
             && !anchor.getNetworkLocation().equals(p.getNetworkLocation()))
         .collect(Collectors.toList());
+    if (!nodesOnOtherRack.isEmpty()) {
+      return nodesOnOtherRack.get(0);
+    }
+    return null;
+  }
+
+  /**
+   * Choose node on different separate racks to anchor and other nodes chosen
+   * based on rack scatter policy.  Placing if possible each pipeline on nodes
+   * on separate racks for maximum fault-tolerance.
+   * If a node on different racks cannot be found, then return a random node.
+   * @param healthyNodes healthy nodes
+   * @param excludedNodes excluded nodes
+   * @param networkTopology network topology
+   * @param results nodes chosen for policy pipeline placement thus far
+   * @return a node on different rack
+   */
+  protected DatanodeDetails chooseNodeBasedOnRackScatter(
+      List<DatanodeDetails> healthyNodes,  List<DatanodeDetails> excludedNodes,
+      NetworkTopology networkTopology, List<DatanodeDetails> results) {
+    Preconditions.checkArgument(networkTopology != null);
+    if (checkAllNodesAreEqual(networkTopology)) {
+      return null;
+    }
+
+    List<String> racks = results.stream().map(node ->
+        node.getNetworkLocation()).collect(Collectors.toList());
+    List<DatanodeDetails>  nodesOnOtherRack = healthyNodes.stream().filter(
+            p -> !excludedNodes.contains(p)
+                && !racks.contains(p.getNetworkLocation()))
+        .collect(Collectors.toList());
+
     if (!nodesOnOtherRack.isEmpty()) {
       return nodesOnOtherRack.get(0);
     }

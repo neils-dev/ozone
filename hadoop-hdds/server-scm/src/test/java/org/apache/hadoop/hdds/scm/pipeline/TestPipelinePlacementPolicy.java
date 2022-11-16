@@ -18,8 +18,10 @@
 
 package org.apache.hadoop.hdds.scm.pipeline;
 
+import java.io.IOException;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -64,8 +66,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.io.IOException;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationFactor.ONE;
 import static org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationFactor.THREE;
@@ -73,6 +75,7 @@ import static org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationType.R
 import static org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationType.STAND_ALONE;
 import static org.apache.hadoop.hdds.scm.ScmConfigKeys.OZONE_DATANODE_RATIS_VOLUME_FREE_SPACE_MIN;
 import static org.apache.hadoop.hdds.scm.ScmConfigKeys.OZONE_DATANODE_PIPELINE_LIMIT;
+import static org.apache.hadoop.hdds.scm.ScmConfigKeys.OZONE_SCM_CONTAINER_PLACEMENT_IMPL_KEY;
 import static org.apache.hadoop.hdds.scm.net.NetConstants.LEAF_SCHEMA;
 import static org.apache.hadoop.hdds.scm.net.NetConstants.RACK_SCHEMA;
 import static org.apache.hadoop.hdds.scm.net.NetConstants.ROOT_SCHEMA;
@@ -94,6 +97,11 @@ public class TestPipelinePlacementPolicy {
 
   private List<DatanodeDetails> nodesWithOutRackAwareness = new ArrayList<>();
   private List<DatanodeDetails> nodesWithRackAwareness = new ArrayList<>();
+
+  private static ArrayList<String> pipelinePlacementRackPolicy() {
+    return new ArrayList<>(Arrays.asList("SCMContainerPlacementRackAware",
+        "SCMContainerPlacementRackScatter"));
+  }
 
   @BeforeEach
   public void init() throws Exception {
@@ -158,6 +166,14 @@ public class TestPipelinePlacementPolicy {
     DatanodeDetails node = MockDatanodeDetails.randomDatanodeDetails();
     nodesWithOutRackAwareness.add(node);
     return node;
+  }
+
+  private void initRackScatterTest() {
+    conf.set(OZONE_SCM_CONTAINER_PLACEMENT_IMPL_KEY,
+        "org.apache.hadoop.hdds.scm.container.placement" +
+            ".algorithms.SCMContainerPlacementRackScatter");
+    placementPolicy = new PipelinePlacementPolicy(
+        nodeManager, stateManager, conf);
   }
 
   @Test
@@ -324,6 +340,30 @@ public class TestPipelinePlacementPolicy {
     // next node should be on a different rack.
     Assertions.assertNotEquals(anchor.getNetworkLocation(),
         nextNode.getNetworkLocation());
+  }
+
+  @Test
+  public void testChooseNodeBasedOnRackScatter() {
+    initRackScatterTest();
+    List<DatanodeDetails> healthyNodes = overWriteLocationInNodes(
+        nodeManager.getNodes(NodeStatus.inServiceHealthy()));
+    List<DatanodeDetails> results = new ArrayList<>();
+    // place initial pipeline on anchor node
+    DatanodeDetails anchor = placementPolicy.chooseNode(healthyNodes);
+    results.add(anchor);
+    NetworkTopology topologyWithDifRacks =
+        createNetworkTopologyOnDifRacks();
+    // place next pipelines, each pipeline should be on nodes on separate racks
+    while (results.size() < 3) {
+      DatanodeDetails nextNode = placementPolicy.chooseNodeBasedOnRackScatter(
+          healthyNodes, new ArrayList<>(PIPELINE_PLACEMENT_MAX_NODES_COUNT),
+          topologyWithDifRacks, results);
+      Assertions.assertNotNull(nextNode);
+      // next node should be on a different rack.
+      Assertions.assertNotEquals(anchor.getNetworkLocation(),
+          nextNode.getNetworkLocation());
+      results.add(nextNode);
+    }
   }
 
   @Test
@@ -543,11 +583,16 @@ public class TestPipelinePlacementPolicy {
     Assertions.assertEquals(0, status.misReplicationCount());
   }
 
-  @Test
-  public void test3NodesInSameRackReturnedWhenOnlyOneHealthyRackIsPresent()
+  @ParameterizedTest
+  @MethodSource("pipelinePlacementRackPolicy")
+  public void test3NodesInSameRackReturnedWhenOnlyOneHealthyRackIsPresent(
+      String pipelinePlacementPolicy)
       throws Exception {
+    if (pipelinePlacementPolicy.equals(
+        "SCMContainerPlacementRackScatter")) {
+      initRackScatterTest();
+    }
     List<DatanodeDetails> dns = setupSkewedRacks();
-
     int nodesRequired = HddsProtos.ReplicationFactor.THREE.getNumber();
     // Set the only node on rack1 stale. This makes the cluster effectively a
     // single rack.
