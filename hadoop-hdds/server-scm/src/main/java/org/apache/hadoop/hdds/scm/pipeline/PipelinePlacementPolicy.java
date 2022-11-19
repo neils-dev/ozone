@@ -264,15 +264,6 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
     return node;
   }
 
-  /**
-   * Get result set based on the pipeline placement algorithm which considers
-   * network topology and rack awareness.
-   * @param nodesRequired - Nodes Required
-   * @param healthyNodes - List of Nodes in the result set.
-   * @return a list of datanodes
-   * @throws SCMException SCMException
-   */
-  @Override
   public List<DatanodeDetails> getResultSet(
       int nodesRequired, List<DatanodeDetails> healthyNodes)
       throws SCMException {
@@ -357,8 +348,8 @@ public final class PipelinePlacementPolicy extends SCMCommonPlacementPolicy {
 
     if (results.size() < nodesRequired) {
       LOG.warn("Unable to find the required number of " +
-              "healthy nodes that  meet the criteria. Required nodes: {}, " +
-              "Found nodes: {}", nodesRequired, results.size());
+          "healthy nodes that  meet the criteria. Required nodes: {}, " +
+          "Found nodes: {}", nodesRequired, results.size());
       throw new SCMException("Unable to find required number of nodes.",
           SCMException.ResultCodes.FAILED_TO_FIND_SUITABLE_NODE);
     }
