@@ -69,6 +69,8 @@ import static org.apache.hadoop.hdds.protocol.MockDatanodeDetails.randomDatanode
 import static org.apache.hadoop.ozone.container.upgrade.UpgradeUtils.defaultLayoutVersionProto;
 import static org.apache.hadoop.hdds.upgrade.HDDSLayoutVersionManager.maxLayoutVersion;
 import static org.apache.hadoop.ozone.container.common.ContainerTestUtils.createEndpoint;
+
+import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -215,6 +217,31 @@ public class TestEndPoint {
       assertEquals(1, ozoneContainer.getVolumeSet().getFailedVolumesList()
           .size());
 
+    }
+  }
+
+  @Test
+  /**
+   * This test checks that dnlayout version file contains proper
+   * clusterID identifying the scm cluster the datanode is part of.
+   * Dnlayout version file set upon call to version endpoint.
+   */
+  public void testDnLayoutVersionFile() throws Exception {
+    try (EndpointStateMachine rpcEndPoint = createEndpoint(config,
+        serverAddress, 1000)) {
+      DatanodeDetails datanodeDetails = randomDatanodeDetails();
+      OzoneContainer ozoneContainer = new OzoneContainer(
+          datanodeDetails, config, getContext(randomDatanodeDetails()), null);
+      rpcEndPoint.setState(EndpointStateMachine.EndPointStates.GETVERSION);
+      VersionEndpointTask versionTask = new VersionEndpointTask(rpcEndPoint,
+          config, ozoneContainer);
+      EndpointStateMachine.EndPointStates newState = versionTask.call();
+
+      // After the version call, the datanode layout file should
+      // have its clusterID field set to the clusterID of the scm
+      DatanodeLayoutStorage layoutStorage
+          = new DatanodeLayoutStorage(config, "na_expect_storage_initialized");
+      Assert.assertEquals(scmServerImpl.getClusterId(), layoutStorage.getClusterID());
     }
   }
 
