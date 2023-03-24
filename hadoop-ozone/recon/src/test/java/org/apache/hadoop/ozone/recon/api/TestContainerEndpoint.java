@@ -23,6 +23,7 @@ import static org.apache.hadoop.ozone.recon.OMMetadataManagerTestUtils.getRandom
 import static org.apache.hadoop.ozone.recon.OMMetadataManagerTestUtils.getTestReconOmMetadataManager;
 import static org.apache.hadoop.ozone.recon.OMMetadataManagerTestUtils.initializeNewOmMetadataManager;
 import static org.apache.hadoop.ozone.recon.OMMetadataManagerTestUtils.writeDataToOm;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -41,21 +42,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.hdds.client.BlockID;
+import org.apache.hadoop.hdds.client.RatisReplicationConfig;
 import org.apache.hadoop.hdds.protocol.DatanodeDetails;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.ReplicationFactor;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
+import org.apache.hadoop.hdds.scm.container.common.helpers.ContainerWithPipeline;
 import org.apache.hadoop.hdds.scm.pipeline.Pipeline;
 import org.apache.hadoop.hdds.scm.pipeline.PipelineID;
 import org.apache.hadoop.hdds.scm.server.OzoneStorageContainerManager;
 import org.apache.hadoop.ozone.om.OMMetadataManager;
+import org.apache.hadoop.ozone.om.helpers.BucketLayout;
 import org.apache.hadoop.ozone.om.helpers.OmKeyLocationInfo;
 import org.apache.hadoop.ozone.om.helpers.OmKeyLocationInfoGroup;
 import org.apache.hadoop.ozone.recon.ReconTestInjector;
@@ -71,14 +76,14 @@ import org.apache.hadoop.ozone.recon.persistence.ContainerHistory;
 import org.apache.hadoop.ozone.recon.persistence.ContainerHealthSchemaManager;
 import org.apache.hadoop.ozone.recon.recovery.ReconOMMetadataManager;
 import org.apache.hadoop.ozone.recon.scm.ReconContainerManager;
+import org.apache.hadoop.ozone.recon.scm.ReconPipelineManager;
 import org.apache.hadoop.ozone.recon.scm.ReconStorageContainerManagerFacade;
-import org.apache.hadoop.ozone.recon.spi.ContainerDBServiceProvider;
+import org.apache.hadoop.ozone.recon.spi.ReconContainerMetadataManager;
 import org.apache.hadoop.ozone.recon.spi.StorageContainerServiceProvider;
 import org.apache.hadoop.ozone.recon.spi.impl.OzoneManagerServiceProviderImpl;
 import org.apache.hadoop.ozone.recon.spi.impl.StorageContainerServiceProviderImpl;
 import org.apache.hadoop.ozone.recon.tasks.ContainerKeyMapperTask;
 import org.apache.hadoop.hdds.utils.db.Table;
-import org.hadoop.ozone.recon.schema.ContainerSchemaDefinition;
 import org.hadoop.ozone.recon.schema.ContainerSchemaDefinition.UnHealthyContainerStates;
 import org.hadoop.ozone.recon.schema.tables.pojos.UnhealthyContainers;
 import org.junit.Assert;
@@ -97,12 +102,14 @@ public class TestContainerEndpoint {
 
   private OzoneStorageContainerManager ozoneStorageContainerManager;
   private ReconContainerManager reconContainerManager;
-  private ContainerDBServiceProvider containerDbServiceProvider;
+  private ReconPipelineManager reconPipelineManager;
+  private ReconContainerMetadataManager reconContainerMetadataManager;
   private ContainerEndpoint containerEndpoint;
   private boolean isSetupDone = false;
   private ContainerHealthSchemaManager containerHealthSchemaManager;
   private ReconOMMetadataManager reconOMMetadataManager;
-  private ContainerID containerID = new ContainerID(1L);
+  private ContainerID containerID = ContainerID.valueOf(1L);
+  private Pipeline pipeline;
   private PipelineID pipelineID;
   private long keyCount = 5L;
 
@@ -115,9 +122,6 @@ public class TestContainerEndpoint {
     reconOMMetadataManager = getTestReconOmMetadataManager(
         initializeNewOmMetadataManager(temporaryFolder.newFolder()),
         temporaryFolder.newFolder());
-
-    Pipeline pipeline = getRandomPipeline();
-    pipelineID = pipeline.getId();
 
     ReconTestInjector reconTestInjector =
         new ReconTestInjector.Builder(temporaryFolder)
@@ -139,11 +143,17 @@ public class TestContainerEndpoint {
         reconTestInjector.getInstance(OzoneStorageContainerManager.class);
     reconContainerManager = (ReconContainerManager)
         ozoneStorageContainerManager.getContainerManager();
-    containerDbServiceProvider =
-        reconTestInjector.getInstance(ContainerDBServiceProvider.class);
+    reconPipelineManager = (ReconPipelineManager)
+        ozoneStorageContainerManager.getPipelineManager();
+    reconContainerMetadataManager =
+        reconTestInjector.getInstance(ReconContainerMetadataManager.class);
     containerEndpoint = reconTestInjector.getInstance(ContainerEndpoint.class);
     containerHealthSchemaManager =
         reconTestInjector.getInstance(ContainerHealthSchemaManager.class);
+
+    pipeline = getRandomPipeline();
+    pipelineID = pipeline.getId();
+    reconPipelineManager.addPipeline(pipeline);
   }
 
   @Before
@@ -153,8 +163,6 @@ public class TestContainerEndpoint {
       initializeInjector();
       isSetupDone = true;
     }
-    //Write Data to OM
-    Pipeline pipeline = getRandomPipeline();
 
     List<OmKeyLocationInfo> omKeyLocationInfoList = new ArrayList<>();
     BlockID blockID1 = new BlockID(1, 101);
@@ -221,9 +229,10 @@ public class TestContainerEndpoint {
     OMMetadataManager omMetadataManagerMock = mock(OMMetadataManager.class);
     Table tableMock = mock(Table.class);
     when(tableMock.getName()).thenReturn("KeyTable");
-    when(omMetadataManagerMock.getKeyTable()).thenReturn(tableMock);
+    when(omMetadataManagerMock.getKeyTable(getBucketLayout()))
+        .thenReturn(tableMock);
     ContainerKeyMapperTask containerKeyMapperTask  =
-        new ContainerKeyMapperTask(containerDbServiceProvider);
+        new ContainerKeyMapperTask(reconContainerMetadataManager);
     containerKeyMapperTask.reprocess(reconOMMetadataManager);
   }
 
@@ -320,15 +329,17 @@ public class TestContainerEndpoint {
   }
 
   @Test
-  public void testGetContainers() {
-    Response response = containerEndpoint.getContainers(-1, 0L);
+  public void testGetContainers() throws IOException, TimeoutException {
+    putContainerInfos(5);
+
+    Response response = containerEndpoint.getContainers(10, 0L);
 
     ContainersResponse responseObject =
         (ContainersResponse) response.getEntity();
 
     ContainersResponse.ContainersResponseData data =
         responseObject.getContainersResponseData();
-    assertEquals(2, data.getTotalCount());
+    assertEquals(5, data.getTotalCount());
 
     List<ContainerMetadata> containers = new ArrayList<>(data.getContainers());
 
@@ -336,34 +347,41 @@ public class TestContainerEndpoint {
 
     ContainerMetadata containerMetadata = iterator.next();
     assertEquals(1L, containerMetadata.getContainerID());
-    // Number of keys for CID:1 should be 3 because of two different versions
-    // of key_two stored in CID:1
-    assertEquals(3L, containerMetadata.getNumberOfKeys());
+    // Number of keys for CID:1
+    assertEquals(5L, containerMetadata.getNumberOfKeys());
 
     containerMetadata = iterator.next();
     assertEquals(2L, containerMetadata.getContainerID());
-    assertEquals(2L, containerMetadata.getNumberOfKeys());
+    assertEquals(5L, containerMetadata.getNumberOfKeys());
 
     // test if limit works as expected
-    response = containerEndpoint.getContainers(1, 0L);
+    response = containerEndpoint.getContainers(2, 0L);
     responseObject = (ContainersResponse) response.getEntity();
     data = responseObject.getContainersResponseData();
     containers = new ArrayList<>(data.getContainers());
-    assertEquals(1, containers.size());
+    // The results will be limited to 2 containers only
+    assertEquals(2, containers.size());
     assertEquals(2, data.getTotalCount());
   }
 
   @Test
-  public void testGetContainersWithPrevKey() {
+  public void testGetContainersWithPrevKey()
+      throws IOException, TimeoutException {
+    putContainerInfos(5);
 
-    Response response = containerEndpoint.getContainers(1, 1L);
+    // Test the case where prevKey = 2 and limit = 5
+    Response response = containerEndpoint.getContainers(5, 2L);
+
+    // Ensure that the response object is not null
+    assertNotNull(response);
 
     ContainersResponse responseObject =
         (ContainersResponse) response.getEntity();
 
     ContainersResponse.ContainersResponseData data =
         responseObject.getContainersResponseData();
-    assertEquals(2, data.getTotalCount());
+    // Ensure that the total count of containers is 4
+    assertEquals(4, data.getTotalCount());
 
     List<ContainerMetadata> containers = new ArrayList<>(data.getContainers());
 
@@ -371,38 +389,26 @@ public class TestContainerEndpoint {
 
     ContainerMetadata containerMetadata = iterator.next();
 
-    assertEquals(1, containers.size());
+    // Ensure that the containers list size is 4
+    assertEquals(4, containers.size());
+    // Ensure that the first container ID is 2
     assertEquals(2L, containerMetadata.getContainerID());
 
+    // test for negative cases
     response = containerEndpoint.getContainers(-1, 0L);
     responseObject = (ContainersResponse) response.getEntity();
-    data = responseObject.getContainersResponseData();
-    containers = new ArrayList<>(data.getContainers());
-    assertEquals(2, containers.size());
-    assertEquals(2, data.getTotalCount());
-    iterator = containers.iterator();
-    containerMetadata = iterator.next();
-    assertEquals(1L, containerMetadata.getContainerID());
+    // Ensure that the response object is null when limit is negative
+    assertNull(responseObject);
 
-    // test for negative cases
-    response = containerEndpoint.getContainers(-1, 5L);
+    response = containerEndpoint.getContainers(10, -1L);
     responseObject = (ContainersResponse) response.getEntity();
-    data = responseObject.getContainersResponseData();
-    containers = new ArrayList<>(data.getContainers());
-    assertEquals(0, containers.size());
-    assertEquals(2, data.getTotalCount());
-
-    response = containerEndpoint.getContainers(-1, -1L);
-    responseObject = (ContainersResponse) response.getEntity();
-    data = responseObject.getContainersResponseData();
-    containers = new ArrayList<>(data.getContainers());
-    assertEquals(2, containers.size());
-    assertEquals(2, data.getTotalCount());
+    // Ensure that the response object is null when prevKey is negative
+    assertNull(responseObject);
   }
 
   @Test
-  public void testGetMissingContainers() throws IOException {
-    Response response = containerEndpoint.getMissingContainers();
+  public void testGetMissingContainers() throws IOException, TimeoutException {
+    Response response = containerEndpoint.getMissingContainers(1000);
 
     MissingContainersResponse responseObject =
         (MissingContainersResponse) response.getEntity();
@@ -410,44 +416,42 @@ public class TestContainerEndpoint {
     assertEquals(0, responseObject.getTotalCount());
     assertEquals(Collections.EMPTY_LIST, responseObject.getContainers());
 
-    // Add missing containers to the database
-    long missingSince = System.currentTimeMillis();
-    UnhealthyContainers missing = new UnhealthyContainers();
-    missing.setContainerId(1L);
-    missing.setInStateSince(missingSince);
-    missing.setActualReplicaCount(0);
-    missing.setExpectedReplicaCount(3);
-    missing.setReplicaDelta(3);
-    missing.setContainerState(
-        ContainerSchemaDefinition.UnHealthyContainerStates.MISSING.toString());
-    ArrayList<UnhealthyContainers> missingList =
-        new ArrayList<UnhealthyContainers>();
-    missingList.add(missing);
-    containerHealthSchemaManager.insertUnhealthyContainerRecords(missingList);
+    putContainerInfos(5);
+    uuid1 = newDatanode("host1", "127.0.0.1");
+    uuid2 = newDatanode("host2", "127.0.0.2");
+    uuid3 = newDatanode("host3", "127.0.0.3");
+    uuid4 = newDatanode("host4", "127.0.0.4");
+    createUnhealthyRecords(5, 0, 0, 0);
 
-    putContainerInfos(1);
-    // Add container history for id 1
-    final UUID u1 = newDatanode("host1", "127.0.0.1");
-    final UUID u2 = newDatanode("host2", "127.0.0.2");
-    final UUID u3 = newDatanode("host3", "127.0.0.3");
-    final UUID u4 = newDatanode("host4", "127.0.0.4");
-    reconContainerManager.upsertContainerHistory(1L, u1, 1L);
-    reconContainerManager.upsertContainerHistory(1L, u2, 2L);
-    reconContainerManager.upsertContainerHistory(1L, u3, 3L);
-    reconContainerManager.upsertContainerHistory(1L, u4, 4L);
+    Response responseWithLimit = containerEndpoint.getMissingContainers(3);
+    MissingContainersResponse responseWithLimitObject
+            = (MissingContainersResponse) responseWithLimit.getEntity();
+    assertEquals(3, responseWithLimitObject.getTotalCount());
+    MissingContainerMetadata containerWithLimit =
+            responseWithLimitObject.getContainers().stream().findFirst()
+                    .orElse(null);
+    assertNotNull(containerWithLimit);
 
-    response = containerEndpoint.getMissingContainers();
+    Collection<MissingContainerMetadata> recordsWithLimit
+            = responseWithLimitObject.getContainers();
+    List<MissingContainerMetadata> missingWithLimit
+            = new ArrayList<>(recordsWithLimit);
+    assertEquals(3, missingWithLimit.size());
+    assertEquals(1L, missingWithLimit.get(0).getContainerID());
+    assertEquals(2L, missingWithLimit.get(1).getContainerID());
+    assertEquals(3L, missingWithLimit.get(2).getContainerID());
+
+    response = containerEndpoint.getMissingContainers(1000);
     responseObject = (MissingContainersResponse) response.getEntity();
-    assertEquals(1, responseObject.getTotalCount());
+    assertEquals(5, responseObject.getTotalCount());
     MissingContainerMetadata container =
         responseObject.getContainers().stream().findFirst().orElse(null);
-    Assert.assertNotNull(container);
+    assertNotNull(container);
 
     assertEquals(containerID.getId(), container.getContainerID());
     assertEquals(keyCount, container.getKeys());
     assertEquals(pipelineID.getId(), container.getPipelineID());
     assertEquals(3, container.getReplicas().size());
-    assertEquals(missingSince, container.getMissingSince());
 
     Set<String> datanodes = Collections.unmodifiableSet(
         new HashSet<>(Arrays.asList("host2", "host3", "host4")));
@@ -460,26 +464,25 @@ public class TestContainerEndpoint {
   ContainerInfo newContainerInfo(long containerId) {
     return new ContainerInfo.Builder()
         .setContainerID(containerId)
-        .setReplicationType(HddsProtos.ReplicationType.RATIS)
+        .setReplicationConfig(
+            RatisReplicationConfig.getInstance(ReplicationFactor.THREE))
         .setState(HddsProtos.LifeCycleState.OPEN)
         .setOwner("owner1")
         .setNumberOfKeys(keyCount)
-        .setReplicationFactor(ReplicationFactor.THREE)
         .setPipelineID(pipelineID)
         .build();
   }
 
-  void putContainerInfos(int num) throws IOException {
+  void putContainerInfos(int num) throws IOException, TimeoutException {
     for (int i = 1; i <= num; i++) {
       final ContainerInfo info = newContainerInfo(i);
-      reconContainerManager.getContainerStore().put(new ContainerID(i), info);
-      reconContainerManager.getContainerStateManager().addContainerInfo(
-          i, info, null, null);
+      reconContainerManager.addNewContainer(
+          new ContainerWithPipeline(info, pipeline));
     }
   }
 
   @Test
-  public void testUnhealthyContainers() throws IOException {
+  public void testUnhealthyContainers() throws IOException, TimeoutException {
     Response response = containerEndpoint.getUnhealthyContainers(1000, 1);
 
     UnhealthyContainersResponse responseObject =
@@ -573,7 +576,8 @@ public class TestContainerEndpoint {
   }
 
   @Test
-  public void testUnhealthyContainersFilteredResponse() throws IOException {
+  public void testUnhealthyContainersFilteredResponse()
+      throws IOException, TimeoutException {
     String missing =  UnHealthyContainerStates.MISSING.toString();
 
     Response response = containerEndpoint
@@ -626,7 +630,8 @@ public class TestContainerEndpoint {
   }
 
   @Test
-  public void testUnhealthyContainersPaging() throws IOException {
+  public void testUnhealthyContainersPaging()
+      throws IOException, TimeoutException {
     putContainerInfos(6);
     uuid1 = newDatanode("host1", "127.0.0.1");
     uuid2 = newDatanode("host2", "127.0.0.2");
@@ -663,12 +668,12 @@ public class TestContainerEndpoint {
     final UUID u2 = newDatanode("host2", "127.0.0.2");
     final UUID u3 = newDatanode("host3", "127.0.0.3");
     final UUID u4 = newDatanode("host4", "127.0.0.4");
-    reconContainerManager.upsertContainerHistory(1L, u1, 1L);
-    reconContainerManager.upsertContainerHistory(1L, u2, 2L);
-    reconContainerManager.upsertContainerHistory(1L, u3, 3L);
-    reconContainerManager.upsertContainerHistory(1L, u4, 4L);
+    reconContainerManager.upsertContainerHistory(1L, u1, 1L, 1L);
+    reconContainerManager.upsertContainerHistory(1L, u2, 2L, 1L);
+    reconContainerManager.upsertContainerHistory(1L, u3, 3L, 1L);
+    reconContainerManager.upsertContainerHistory(1L, u4, 4L, 1L);
 
-    reconContainerManager.upsertContainerHistory(1L, u1, 5L);
+    reconContainerManager.upsertContainerHistory(1L, u1, 5L, 1L);
 
     Response response = containerEndpoint.getReplicaHistoryForContainer(1L);
     List<ContainerHistory> histories =
@@ -748,9 +753,13 @@ public class TestContainerEndpoint {
     missingList.add(missing);
     containerHealthSchemaManager.insertUnhealthyContainerRecords(missingList);
 
-    reconContainerManager.upsertContainerHistory(cID, uuid1, 1L);
-    reconContainerManager.upsertContainerHistory(cID, uuid2, 2L);
-    reconContainerManager.upsertContainerHistory(cID, uuid3, 3L);
-    reconContainerManager.upsertContainerHistory(cID, uuid4, 4L);
+    reconContainerManager.upsertContainerHistory(cID, uuid1, 1L, 1L);
+    reconContainerManager.upsertContainerHistory(cID, uuid2, 2L, 1L);
+    reconContainerManager.upsertContainerHistory(cID, uuid3, 3L, 1L);
+    reconContainerManager.upsertContainerHistory(cID, uuid4, 4L, 1L);
+  }
+
+  private BucketLayout getBucketLayout() {
+    return BucketLayout.DEFAULT;
   }
 }
