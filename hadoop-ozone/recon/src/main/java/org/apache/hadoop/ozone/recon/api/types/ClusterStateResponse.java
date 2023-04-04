@@ -55,6 +55,18 @@ public final class ClusterStateResponse {
   private int containers;
 
   /**
+   * Total count of missing containers in the cluster.
+   */
+  @JsonProperty("missingContainers")
+  private int missingContainers;
+
+  /**
+   * Total count of open containers in the cluster.
+   */
+  @JsonProperty("openContainers")
+  private int openContainers;
+
+  /**
    * Total count of volumes in the cluster.
    */
   @JsonProperty("volumes")
@@ -71,6 +83,18 @@ public final class ClusterStateResponse {
    */
   @JsonProperty("keys")
   private long keys;
+
+  /**
+   * Total count of keys marked for deletion in the cluster.
+   */
+  @JsonProperty("deletedKeys")
+  private long deletedKeys;
+
+  /**
+   * Total count of directories marked for deletion in the cluster.
+   */
+  @JsonProperty
+  private long deletedDirs;
 
   /**
    * Returns new builder class that builds a ClusterStateResponse.
@@ -90,6 +114,10 @@ public final class ClusterStateResponse {
     this.healthyDatanodes = b.healthyDatanodes;
     this.storageReport = b.storageReport;
     this.containers = b.containers;
+    this.missingContainers = b.missingContainers;
+    this.openContainers = b.openContainers;
+    this.deletedKeys = b.deletedKeys;
+    this.deletedDirs = b.deletedDirs;
   }
 
   /**
@@ -102,19 +130,27 @@ public final class ClusterStateResponse {
     private int healthyDatanodes;
     private DatanodeStorageReport storageReport;
     private int containers;
+    private int missingContainers;
+    private int openContainers;
     private long volumes;
     private long buckets;
     private long keys;
+    private long deletedKeys;
+    private long deletedDirs;
 
     public Builder() {
       // Default values
       this.containers = 0;
+      this.missingContainers = 0;
+      this.openContainers = 0;
       this.volumes = 0;
       this.buckets = 0;
       this.keys = 0;
       this.pipelines = 0;
       this.totalDatanodes = 0;
       this.healthyDatanodes = 0;
+      this.deletedKeys = 0;
+      this.deletedDirs = 0;
     }
 
     public Builder setPipelines(int pipelines) {
@@ -142,6 +178,16 @@ public final class ClusterStateResponse {
       return this;
     }
 
+    public Builder setMissingContainers(int missingContainers) {
+      this.missingContainers = missingContainers;
+      return this;
+    }
+
+    public Builder setOpenContainers(int openContainers) {
+      this.openContainers = openContainers;
+      return this;
+    }
+
     public Builder setVolumes(long volumes) {
       this.volumes = volumes;
       return this;
@@ -150,6 +196,14 @@ public final class ClusterStateResponse {
     public Builder setBuckets(long buckets) {
       this.buckets = buckets;
       return this;
+    }
+
+    public void setDeletedKeys(long deletedKeys) {
+      this.deletedKeys = deletedKeys;
+    }
+
+    public void setDeletedDirs(long deletedDirs) {
+      this.deletedDirs = deletedDirs;
     }
 
     public Builder setKeys(long keys) {
@@ -188,11 +242,27 @@ public final class ClusterStateResponse {
     return volumes;
   }
 
+  public int getMissingContainers() {
+    return missingContainers;
+  }
+
+  public int getOpenContainers() {
+    return openContainers;
+  }
+
   public long getBuckets() {
     return buckets;
   }
 
   public long getKeys() {
     return keys;
+  }
+
+  public long getDeletedKeys() {
+    return deletedKeys;
+  }
+
+  public long getDeletedDirs() {
+    return deletedDirs;
   }
 }
