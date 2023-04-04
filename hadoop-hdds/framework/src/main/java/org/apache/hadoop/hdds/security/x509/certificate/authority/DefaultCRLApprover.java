@@ -27,6 +27,7 @@ import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import java.security.PrivateKey;
+import java.security.PrivilegedAction;
 import java.security.cert.CRLException;
 import java.security.cert.X509CRL;
 
@@ -54,5 +55,13 @@ public class DefaultCRLApprover implements CRLApprover {
         builder.build(contentSignerBuilder.build(caPrivate));
 
     return CRLCodec.getX509CRL(crlHolder);
+  }
+
+  public SecurityConfig getConfig() {
+    return config;
+  }
+
+  public PrivateKey getKey() {
+    return caPrivate;
   }
 }

@@ -99,6 +99,13 @@ public interface CertificateStore {
                                     CRLApprover approver)
       throws IOException, TimeoutException;
 
+  @Replicate
+  void revokeWithoutCRL(List<BigInteger> serialIDs,
+                        X509CertificateHolder caCertificateHolder,
+                        CRLReason reason,
+                        Date revocationTime)
+      throws IOException, TimeoutException;
+
   /**
    * Deletes an expired certificate from the store. Please note: We don't
    * remove revoked certificates, we need that information to generate the

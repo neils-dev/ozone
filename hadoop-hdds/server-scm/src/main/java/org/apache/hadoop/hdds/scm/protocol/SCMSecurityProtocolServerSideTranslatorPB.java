@@ -149,6 +149,7 @@ public class SCMSecurityProtocolServerSideTranslatorPB
             .setCmdType(request.getCmdType())
             .setRevokeCertificatesResponseProto(revokeCertificates(
                 request.getRevokeCertificatesRequest()))
+            .setStatus(Status.OK)
             .build();
       case GetCert:
         return scmSecurityResponse.setGetCertResponseProto(

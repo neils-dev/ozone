@@ -327,12 +327,15 @@ public class DefaultCAServer implements CertificateServer {
       return revoked;
     }
     try {
-      revoked.complete(
+      /*revoked.complete(
           store.revokeCertificates(certificates,
               getCACertificate(), reason, revocationTime, crlApprover)
-      );
+      );*/
+      store.revokeWithoutCRL(certificates,
+          getCACertificate(), reason, revocationTime);
     } catch (IOException | TimeoutException ex) {
       LOG.error("Revoking the certificate failed.", ex.getCause());
+      LOG.error("Revoking the certificate failed. ex: ", ex);
       revoked.completeExceptionally(new SCMSecurityException(ex));
     }
     return revoked;

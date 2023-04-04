@@ -17,6 +17,9 @@
 
 package org.apache.hadoop.hdds.scm.ha.io;
 
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.asn1.x509.CRLReason;
+
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -27,6 +30,7 @@ import org.apache.commons.lang3.ClassUtils;
 import java.math.BigInteger;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +53,9 @@ public final class CodecFactory {
     codecs.put(BigInteger.class, new BigIntegerCodec());
     codecs.put(X509Certificate.class, new X509CertificateCodec());
     codecs.put(ByteString.class, new ByteStringCodec());
+    codecs.put(X509CertificateHolder.class, new X509CertificateHolderCodec());
+    codecs.put(CRLReason.class, new CRLReasonCodec());
+    codecs.put(Date.class, new DateCodec());
   }
 
   private CodecFactory() { }

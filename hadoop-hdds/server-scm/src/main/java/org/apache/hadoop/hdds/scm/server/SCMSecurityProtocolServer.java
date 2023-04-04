@@ -372,15 +372,15 @@ public class SCMSecurityProtocolServer implements SCMSecurityProtocol {
         certIds.stream().map(id -> new BigInteger(id))
             .collect(Collectors.toList()), CRLReason.lookup(reason),
         new Date(revocationTime));
-    try {
-      Long crlId = revoked.get().get();
+    //try {
+      Long crlId = 1L;//revoked.get().get();
       getGrpcUpdateServer().notifyCrlUpdate();
       return crlId;
-    } catch (InterruptedException | ExecutionException e) {
+    /*} catch (InterruptedException | ExecutionException e) {
       Thread.currentThread().interrupt();
       throw new SCMException("Fail to revoke certs",
           SCMException.ResultCodes.FAILED_TO_REVOKE_CERTIFICATES);
-    }
+    }*/
   }
 
   public SCMUpdateServiceGrpcServer getGrpcUpdateServer() {

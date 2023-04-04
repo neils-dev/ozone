@@ -41,6 +41,7 @@ import picocli.CommandLine.Spec;
         InfoSubcommand.class,
         ListSubcommand.class,
         CleanExpired.class,
+        DeleteSubcommand.class,
     })
 
 @MetaInfServices(SubcommandWithParent.class)

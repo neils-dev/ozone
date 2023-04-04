@@ -21,14 +21,21 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import org.apache.hadoop.hdds.protocol.proto.SCMRatisProtocol.ListArgument;
 import org.apache.hadoop.hdds.scm.ha.ReflectionUtil;
+import org.apache.hadoop.hdds.scm.server.SCMSecurityProtocolServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * {@link Codec} for {@link List} objects.
  */
 public class ListCodec implements Codec {
+
+  private static final Logger LOGGER = LoggerFactory
+      .getLogger(ListCodec.class);
 
   @Override
   public ByteString serialize(Object object)
@@ -51,8 +58,7 @@ public class ListCodec implements Codec {
   public Object deserialize(Class<?> type, ByteString value)
       throws InvalidProtocolBufferException {
     try {
-
-      List<Object> result = (List<Object>) type.newInstance();
+      List<Object> result = (List<Object>) ArrayList.class.newInstance();
       final ListArgument listArgs = (ListArgument) ReflectionUtil
           .getMethod(ListArgument.class, "parseFrom", byte[].class)
           .invoke(null, (Object) value.toByteArray());
@@ -65,6 +71,7 @@ public class ListCodec implements Codec {
     } catch (InstantiationException | NoSuchMethodException |
         IllegalAccessException | InvocationTargetException |
         ClassNotFoundException ex) {
+      LOGGER.info("List cannot be decoded, ex: ", ex);
       throw new InvalidProtocolBufferException(
           "Message cannot be decoded: " + ex.getMessage());
     }

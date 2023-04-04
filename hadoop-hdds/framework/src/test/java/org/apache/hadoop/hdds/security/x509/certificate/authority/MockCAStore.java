@@ -66,6 +66,14 @@ public class MockCAStore implements CertificateStore {
   }
 
   @Override
+  public void revokeWithoutCRL(
+      List<BigInteger> serialIDs,
+      X509CertificateHolder caCertificateHolder,
+      CRLReason reason,
+      Date revocationTime) throws IOException {
+  }
+
+  @Override
   public void removeExpiredCertificate(BigInteger serialID)
       throws IOException {
 
