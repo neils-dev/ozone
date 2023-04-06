@@ -420,4 +420,7 @@ public interface ScmClient extends Closeable {
   StatusAndMessages queryUpgradeFinalizationProgress(
       String upgradeClientID, boolean force, boolean readonly)
       throws IOException;
+
+  List<DatanodeAdminError> decommissionScm(String clusterId,
+      String nodeId) throws IOException;
 }

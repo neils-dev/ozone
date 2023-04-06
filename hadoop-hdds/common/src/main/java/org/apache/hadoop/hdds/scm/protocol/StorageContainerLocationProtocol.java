@@ -56,7 +56,7 @@ public interface StorageContainerLocationProtocol extends Closeable {
   /**
    * Version 1: Initial version.
    */
-  long versionID = 1L;
+      long versionID = 1L;
 
   /**
    * Admin command should take effect on all SCM instance.
@@ -69,7 +69,6 @@ public interface StorageContainerLocationProtocol extends Closeable {
   /**
    * Asks SCM where a container should be allocated. SCM responds with the
    * set of datanodes that should be used creating this container.
-   *
    */
   ContainerWithPipeline allocateContainer(
       HddsProtos.ReplicationType replicationType,
@@ -82,7 +81,7 @@ public interface StorageContainerLocationProtocol extends Closeable {
    *
    * @param containerID - ID of the container.
    * @return ContainerInfo - the container info such as where the pipeline
-   *                         is located.
+   * is located.
    * @throws IOException
    */
   ContainerInfo getContainer(long containerID) throws IOException;
@@ -100,6 +99,7 @@ public interface StorageContainerLocationProtocol extends Closeable {
 
   /**
    * Gets the list of ReplicaInfo known by SCM for a given container.
+   *
    * @param containerId ID of the container
    * @return List of ReplicaInfo for the container or an empty list if none.
    * @throws IOException
@@ -137,10 +137,9 @@ public interface StorageContainerLocationProtocol extends Closeable {
    * searching range cannot exceed the value of count.
    *
    * @param startContainerID start container ID.
-   * @param count count, if count {@literal <} 0, the max size is unlimited.(
-   *              Usually the count will be replace with a very big
-   *              value instead of being unlimited in case the db is very big)
-   *
+   * @param count            count, if count {@literal <} 0, the max size is unlimited.(
+   *                         Usually the count will be replace with a very big
+   *                         value instead of being unlimited in case the db is very big)
    * @return a list of container.
    * @throws IOException
    */
@@ -155,11 +154,10 @@ public interface StorageContainerLocationProtocol extends Closeable {
    * searching range cannot exceed the value of count.
    *
    * @param startContainerID start container ID.
-   * @param count count, if count {@literal <} 0, the max size is unlimited.(
-   *              Usually the count will be replace with a very big
-   *              value instead of being unlimited in case the db is very big)
-   * @param state Container with this state will be returned.
-   *
+   * @param count            count, if count {@literal <} 0, the max size is unlimited.(
+   *                         Usually the count will be replace with a very big
+   *                         value instead of being unlimited in case the db is very big)
+   * @param state            Container with this state will be returned.
    * @return a list of container.
    * @throws IOException
    */
@@ -174,11 +172,11 @@ public interface StorageContainerLocationProtocol extends Closeable {
    * searching range cannot exceed the value of count.
    *
    * @param startContainerID start container ID.
-   * @param count count, if count {@literal <} 0, the max size is unlimited.(
-   *              Usually the count will be replace with a very big
-   *              value instead of being unlimited in case the db is very big)
-   * @param state Container with this state will be returned.
-   * @param factor Container factor
+   * @param count            count, if count {@literal <} 0, the max size is unlimited.(
+   *                         Usually the count will be replace with a very big
+   *                         value instead of being unlimited in case the db is very big)
+   * @param state            Container with this state will be returned.
+   * @param factor           Container factor
    * @return a list of container.
    * @throws IOException
    */
@@ -194,11 +192,11 @@ public interface StorageContainerLocationProtocol extends Closeable {
    * filtered by state and replication config. The returned list is limited to
    * count entries.
    *
-   * @param startContainerID start container ID.
-   * @param count count, if count {@literal <} 0, the max size is unlimited.(
-   *              Usually the count will be replace with a very big
-   *              value instead of being unlimited in case the db is very big)
-   * @param state Container with this state will be returned.
+   * @param startContainerID  start container ID.
+   * @param count             count, if count {@literal <} 0, the max size is unlimited.(
+   *                          Usually the count will be replace with a very big
+   *                          value instead of being unlimited in case the db is very big)
+   * @param state             Container with this state will be returned.
    * @param replicationConfig Replication config for the containers
    * @return a list of container.
    * @throws IOException
@@ -212,17 +210,17 @@ public interface StorageContainerLocationProtocol extends Closeable {
    * Deletes a container in SCM.
    *
    * @param containerID
-   * @throws IOException
-   *   if failed to delete the container mapping from db store
-   *   or container doesn't exist.
+   * @throws IOException if failed to delete the container mapping from db store
+   *                     or container doesn't exist.
    */
   void deleteContainer(long containerID) throws IOException;
 
   /**
-   *  Queries a list of Node Statuses. Passing a null for either opState or
-   *  state acts like a wildcard returning all nodes in that state.
-   * @param opState The node operational state
-   * @param state The node health
+   * Queries a list of Node Statuses. Passing a null for either opState or
+   * state acts like a wildcard returning all nodes in that state.
+   *
+   * @param opState       The node operational state
+   * @param state         The node health
    * @param clientVersion Client's version number
    * @return List of Datanodes.
    * @see org.apache.hadoop.ozone.ClientVersion
@@ -250,8 +248,9 @@ public interface StorageContainerLocationProtocol extends Closeable {
 
   /**
    * Creates a replication pipeline of a specified type.
-   * @param type - replication type
-   * @param factor - factor 1 or 3
+   *
+   * @param type     - replication type
+   * @param factor   - factor 1 or 3
    * @param nodePool - optional machine list to build a pipeline.
    * @throws IOException
    */
@@ -263,7 +262,6 @@ public interface StorageContainerLocationProtocol extends Closeable {
    * Returns the list of active Pipelines.
    *
    * @return list of Pipeline
-   *
    * @throws IOException in case of any exception
    */
   List<Pipeline> listPipelines() throws IOException;
@@ -272,7 +270,6 @@ public interface StorageContainerLocationProtocol extends Closeable {
    * Returns Pipeline with given ID if present.
    *
    * @return Pipeline
-   *
    * @throws IOException in case of any exception
    */
   Pipeline getPipeline(HddsProtos.PipelineID pipelineID) throws IOException;
@@ -312,7 +309,7 @@ public interface StorageContainerLocationProtocol extends Closeable {
   /**
    * Transfer the raft leadership.
    *
-   * @param newLeaderId  the newLeaderId of the target expected leader
+   * @param newLeaderId the newLeaderId of the target expected leader
    * @throws IOException
    */
   void transferLeadership(String newLeaderId) throws IOException;
@@ -322,7 +319,7 @@ public interface StorageContainerLocationProtocol extends Closeable {
    * considered to be failed if it has been sent more than MAX_RETRY limit
    * and its count is reset to -1.
    *
-   * @param count Maximum num of returned transactions, if < 0. return all.
+   * @param count     Maximum num of returned transactions, if < 0. return all.
    * @param startTxId The least transaction id to start with.
    * @return a list of failed deleted block transactions.
    * @throws IOException
@@ -349,6 +346,7 @@ public interface StorageContainerLocationProtocol extends Closeable {
 
   Map<String, Pair<Boolean, String>> getSafeModeRuleStatuses()
       throws IOException;
+
   /**
    * Force SCM out of Safe mode.
    *
@@ -377,6 +375,7 @@ public interface StorageContainerLocationProtocol extends Closeable {
   /**
    * Returns the latest container summary report generated by Replication
    * Manager.
+   *
    * @return The latest ReplicationManagerReport.
    * @throws IOException
    */
@@ -384,6 +383,7 @@ public interface StorageContainerLocationProtocol extends Closeable {
 
   /**
    * Start ContainerBalancer.
+   *
    * @return {@link StartContainerBalancerResponseProto} that contains the
    * start status and an optional message.
    */
@@ -410,8 +410,8 @@ public interface StorageContainerLocationProtocol extends Closeable {
   /**
    * Get Datanode usage information by ip or uuid.
    *
-   * @param ipaddress datanode IP address String
-   * @param uuid datanode UUID String
+   * @param ipaddress     datanode IP address String
+   * @param uuid          datanode UUID String
    * @param clientVersion Client's version number
    * @return List of DatanodeUsageInfoProto. Each element contains info such as
    * capacity, SCMused, and remaining space.
@@ -424,8 +424,8 @@ public interface StorageContainerLocationProtocol extends Closeable {
   /**
    * Get usage information of most or least used datanodes.
    *
-   * @param mostUsed true if most used, false if least used
-   * @param count Integer number of nodes to get info for
+   * @param mostUsed      true if most used, false if least used
+   * @param count         Integer number of nodes to get info for
    * @param clientVersion Client's version number
    * @return List of DatanodeUsageInfoProto. Each element contains info such as
    * capacity, SCMUsed, and remaining space.
@@ -441,6 +441,7 @@ public interface StorageContainerLocationProtocol extends Closeable {
   StatusAndMessages queryUpgradeFinalizationProgress(
       String upgradeClientID, boolean force, boolean readonly)
       throws IOException;
+
   /**
    * Obtain a token which can be used to let datanodes verify authentication of
    * commands operating on {@code containerID}.
@@ -455,4 +456,7 @@ public interface StorageContainerLocationProtocol extends Closeable {
   List<ContainerInfo> getListOfContainers(
       long startContainerID, int count, HddsProtos.LifeCycleState state)
       throws IOException;
+
+  List<DatanodeAdminError> decommissionScm(String clusterId,
+      String nodeId) throws IOException;
 }

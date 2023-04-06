@@ -49,6 +49,8 @@ import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolPro
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DeactivatePipelineRequestProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionNodesRequestProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionNodesResponseProto;
+import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmRequestProto;
+import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.ForceExitSafeModeRequestProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.ForceExitSafeModeResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.GetContainerRequestProto;
@@ -1075,5 +1077,25 @@ public final class StorageContainerLocationProtocolClientSideTranslatorPB
       long startContainerID, int count, HddsProtos.LifeCycleState state)
       throws IOException {
     return listContainer(startContainerID, count, state);
+  }
+
+  @Override
+  public List<DatanodeAdminError> decommissionScm(String clusterId,
+      String nodeId)
+      throws IOException {
+    DecommissionScmRequestProto request = DecommissionScmRequestProto
+        .newBuilder()
+        .setClusterId(clusterId)
+        .setNodeId(nodeId)
+        .build();
+    DecommissionScmResponseProto response =
+        submitRequest(Type.DecommissionScm,
+            builder -> builder.setDecommissionScmRequest(request))
+                .getDecommissionScmResponse();
+    List<DatanodeAdminError> errors = new ArrayList<>();
+    for (DatanodeAdminErrorResponseProto e : response.getFailedHostsList()) {
+      errors.add(new DatanodeAdminError(e.getHost(), e.getError()));
+    }
+    return errors;
   }
 }

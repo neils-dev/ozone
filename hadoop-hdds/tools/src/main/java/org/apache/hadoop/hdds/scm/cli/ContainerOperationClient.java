@@ -509,4 +509,12 @@ public class ContainerOperationClient implements ScmClient {
     return storageContainerLocationClient.queryUpgradeFinalizationProgress(
         upgradeClientID, force, readonly);
   }
+
+  @Override
+  public List<DatanodeAdminError> decommissionScm(String clusterId,
+      String scmNodeId)
+      throws IOException {
+    return storageContainerLocationClient.decommissionScm(clusterId, scmNodeId);
+  }
+
 }

@@ -97,6 +97,7 @@ import org.apache.ratis.protocol.RaftPeerId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.xml.crypto.Data;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -1323,5 +1324,13 @@ public class SCMClientProtocolServer implements
   @Override
   public void close() throws IOException {
     stop();
+  }
+  public List<DatanodeAdminError> decommissionScm(String clusterId,
+      String nodeId) throws IOException
+  {
+    List<DatanodeAdminError> err = new ArrayList<>();
+    err.add(new DatanodeAdminError(clusterId + ", " + nodeId,
+        "replyfromserver"));
+    return err;
   }
 }
