@@ -21,11 +21,10 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.hdds.client.ReplicationConfig;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.DeletedBlocksTransactionInfo;
+import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.StartContainerBalancerResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.Type;
-import org.apache.hadoop.hdds.scm.DatanodeAdminError;
-import org.apache.hadoop.hdds.scm.ScmConfig;
-import org.apache.hadoop.hdds.scm.ScmInfo;
+import org.apache.hadoop.hdds.scm.*;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
 import org.apache.hadoop.hdds.scm.container.ReplicationManagerReport;
@@ -457,6 +456,6 @@ public interface StorageContainerLocationProtocol extends Closeable {
       long startContainerID, int count, HddsProtos.LifeCycleState state)
       throws IOException;
 
-  List<DatanodeAdminError> decommissionScm(String clusterId,
-      String nodeId) throws IOException;
+  DecommissionScmResponseProto decommissionScm(String clusterId,
+      String nodeId, RemoveSCMRequest removeScmRequest) throws IOException;
 }

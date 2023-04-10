@@ -27,11 +27,9 @@ import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.ContainerD
 import org.apache.hadoop.hdds.protocol.datanode.proto.ContainerProtos.ReadContainerResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.DeletedBlocksTransactionInfo;
+import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.StartContainerBalancerResponseProto;
-import org.apache.hadoop.hdds.scm.DatanodeAdminError;
-import org.apache.hadoop.hdds.scm.ScmConfigKeys;
-import org.apache.hadoop.hdds.scm.XceiverClientManager;
-import org.apache.hadoop.hdds.scm.XceiverClientSpi;
+import org.apache.hadoop.hdds.scm.*;
 import org.apache.hadoop.hdds.scm.client.ScmClient;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
@@ -511,10 +509,11 @@ public class ContainerOperationClient implements ScmClient {
   }
 
   @Override
-  public List<DatanodeAdminError> decommissionScm(String clusterId,
-      String scmNodeId)
+  public DecommissionScmResponseProto decommissionScm(String clusterId,
+      String scmNodeId, RemoveSCMRequest removeScmRequest)
       throws IOException {
-    return storageContainerLocationClient.decommissionScm(clusterId, scmNodeId);
+    return storageContainerLocationClient.decommissionScm(clusterId,
+        scmNodeId, removeScmRequest);
   }
 
 }

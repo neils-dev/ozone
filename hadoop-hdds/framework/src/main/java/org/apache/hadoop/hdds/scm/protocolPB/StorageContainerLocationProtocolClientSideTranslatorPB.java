@@ -96,6 +96,8 @@ import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolPro
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.ResetDeletedBlockRetryCountRequestProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.Type;
 import org.apache.hadoop.hdds.scm.DatanodeAdminError;
+import org.apache.hadoop.hdds.scm.RemoveSCMRequest;
+import org.apache.hadoop.hdds.scm.RemoveScmError;
 import org.apache.hadoop.hdds.scm.ScmInfo;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
@@ -1080,22 +1082,39 @@ public final class StorageContainerLocationProtocolClientSideTranslatorPB
   }
 
   @Override
-  public List<DatanodeAdminError> decommissionScm(String clusterId,
-      String nodeId)
+  public DecommissionScmResponseProto decommissionScm(String clusterId,
+      String nodeId, RemoveSCMRequest removeScmRequest)
       throws IOException {
+
+    /*HddsProtos.RemoveScmRequestProto removeScmRequest =
+        HddsProtos.RemoveScmRequestProto.newBuilder()
+            .setScmId(nodeId)
+            .setClusterId(nodeId)
+            .setRatisAddr("")
+            .build();*/
+
     DecommissionScmRequestProto request = DecommissionScmRequestProto
         .newBuilder()
         .setClusterId(clusterId)
         .setNodeId(nodeId)
+        .setRemoveScmRequest(removeScmRequest.getProtobuf())
         .build();
     DecommissionScmResponseProto response =
         submitRequest(Type.DecommissionScm,
             builder -> builder.setDecommissionScmRequest(request))
                 .getDecommissionScmResponse();
-    List<DatanodeAdminError> errors = new ArrayList<>();
-    for (DatanodeAdminErrorResponseProto e : response.getFailedHostsList()) {
+    // get removeScm
+    /*HddsProtos.RemoveScmResponseProto removeScmResponse =
+        response.getRemoveScmResponse();
+    RemoveScmError errors = new RemoveScmError(
+        removeScmResponse.getSuccess(),
+        removeScmResponse.getScmId(),
+        "");*/
+
+    //List<DatanodeAdminError> errors = new ArrayList<>();
+    /*for (DatanodeAdminErrorResponseProto e : response.getFailedHostsList()) {
       errors.add(new DatanodeAdminError(e.getHost(), e.getError()));
-    }
-    return errors;
+    }*/
+    return response;
   }
 }

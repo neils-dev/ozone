@@ -39,11 +39,14 @@ import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.protocol.proto.ReconfigureProtocolProtos.ReconfigureProtocolService;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.DeletedBlocksTransactionInfo;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos;
+import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.StartContainerBalancerResponseProto;
 import org.apache.hadoop.hdds.protocolPB.ReconfigureProtocolPB;
 import org.apache.hadoop.hdds.protocolPB.ReconfigureProtocolServerSideTranslatorPB;
 import org.apache.hadoop.hdds.ratis.RatisHelper;
 import org.apache.hadoop.hdds.scm.DatanodeAdminError;
+import org.apache.hadoop.hdds.scm.RemoveSCMRequest;
+import org.apache.hadoop.hdds.scm.RemoveScmError;
 import org.apache.hadoop.hdds.scm.ScmInfo;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
@@ -97,7 +100,6 @@ import org.apache.ratis.protocol.RaftPeerId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.xml.crypto.Data;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -1325,12 +1327,18 @@ public class SCMClientProtocolServer implements
   public void close() throws IOException {
     stop();
   }
-  public List<DatanodeAdminError> decommissionScm(String clusterId,
-      String nodeId) throws IOException
-  {
-    List<DatanodeAdminError> err = new ArrayList<>();
-    err.add(new DatanodeAdminError(clusterId + ", " + nodeId,
-        "replyfromserver"));
-    return err;
+
+  @Override
+  public DecommissionScmResponseProto decommissionScm(String clusterId,
+      String nodeId, RemoveSCMRequest removeScm) throws IOException {
+    HddsProtos.RemoveScmResponseProto removeScmResponse =
+        HddsProtos.RemoveScmResponseProto.newBuilder()
+        .setScmId(nodeId)
+        .setSuccess(true)
+        .build();
+
+    return DecommissionScmResponseProto.newBuilder()
+        .setRemoveScmResponse(removeScmResponse)
+        .build();
   }
 }

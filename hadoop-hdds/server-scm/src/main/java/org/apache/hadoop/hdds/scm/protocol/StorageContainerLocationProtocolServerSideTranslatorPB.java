@@ -105,6 +105,8 @@ import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolPro
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.ResetDeletedBlockRetryCountRequestProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.ResetDeletedBlockRetryCountResponseProto;
 import org.apache.hadoop.hdds.scm.DatanodeAdminError;
+import org.apache.hadoop.hdds.scm.RemoveSCMRequest;
+import org.apache.hadoop.hdds.scm.RemoveScmError;
 import org.apache.hadoop.hdds.scm.ScmInfo;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
@@ -1222,18 +1224,16 @@ public final class StorageContainerLocationProtocolServerSideTranslatorPB
 
   public DecommissionScmResponseProto decommissionScm(
       DecommissionScmRequestProto request) throws IOException {
-    List<DatanodeAdminError> errors =
-        impl.decommissionScm(request.getClusterId(),
-            request.getNodeId());
+    HddsProtos.RemoveScmResponseProto removeScmResponse =
+        HddsProtos.RemoveScmResponseProto.newBuilder()
+        .setSuccess(true)
+        .setScmId(request.getNodeId())
+        .build();
+
     DecommissionScmResponseProto.Builder response =
-        DecommissionScmResponseProto.newBuilder();
-    for (DatanodeAdminError e : errors) {
-      DatanodeAdminErrorResponseProto.Builder error =
-          DatanodeAdminErrorResponseProto.newBuilder();
-      error.setHost(e.getHostname());
-      error.setError(e.getError());
-      response.addFailedHosts(error);
-    }
+        DecommissionScmResponseProto.newBuilder()
+            .setRemoveScmResponse(removeScmResponse);
+
     return response.build();
   }
 

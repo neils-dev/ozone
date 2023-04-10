@@ -21,8 +21,11 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.hdds.annotation.InterfaceStability;
 import org.apache.hadoop.hdds.client.ReplicationConfig;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.DeletedBlocksTransactionInfo;
+import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.StartContainerBalancerResponseProto;
 import org.apache.hadoop.hdds.scm.DatanodeAdminError;
+import org.apache.hadoop.hdds.scm.RemoveSCMRequest;
+import org.apache.hadoop.hdds.scm.RemoveScmError;
 import org.apache.hadoop.hdds.scm.container.ContainerReplicaInfo;
 import org.apache.hadoop.hdds.scm.container.ReplicationManagerReport;
 import org.apache.hadoop.hdds.scm.container.common.helpers.ContainerWithPipeline;
@@ -421,6 +424,6 @@ public interface ScmClient extends Closeable {
       String upgradeClientID, boolean force, boolean readonly)
       throws IOException;
 
-  List<DatanodeAdminError> decommissionScm(String clusterId,
-      String nodeId) throws IOException;
+  DecommissionScmResponseProto decommissionScm(String clusterId,
+      String nodeId, RemoveSCMRequest removeScmRequest) throws IOException;
 }

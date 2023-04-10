@@ -18,16 +18,15 @@
 package org.apache.hadoop.ozone.admin.scm;
 
 import org.apache.hadoop.hdds.cli.HddsVersionProvider;
-import org.apache.hadoop.hdds.scm.DatanodeAdminError;
+import org.apache.hadoop.hdds.scm.RemoveSCMRequest;
+import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.scm.cli.ScmSubcommand;
 import org.apache.hadoop.hdds.scm.client.ScmClient;
-import org.apache.hadoop.hdds.scm.container.ContainerManager;
 import picocli.CommandLine;
 import picocli.CommandLine.Spec;
 import picocli.CommandLine.Model.CommandSpec;
 
 import java.io.IOException;
-import java.util.List;
 
 /**
  * Handler of ozone admin scm decommission command.
@@ -55,23 +54,14 @@ public class ScmDecommissionSubcommand extends ScmSubcommand {
 
   @Override
   public void execute(ScmClient scmClient) throws IOException {
-    /*if (clusterId == null) {
-      //CommandLine.ParameterException
-      throw new CommandLine.ParameterException(spec.commandLine(), "<clusterId> required");
-    }
-
-    if (nodeId == null) {
-      //CommandLine.ParameterException
-      throw new CommandLine.ParameterException(spec.commandLine(), "<nodeId> required");
-    }*/
-
-    List<DatanodeAdminError> errors = scmClient.decommissionScm(clusterId, nodeId);
-    if (errors.size() > 0) {
+    DecommissionScmResponseProto errors = scmClient.decommissionScm(clusterId, nodeId,
+        new RemoveSCMRequest(clusterId, nodeId, ""));
+    /*if (errors.size() > 0) {
       for (DatanodeAdminError error : errors) {
         System.out.println("Response: " + error.getHostname() + ": "
             + error.getError());
       }
-    }
+    }*/
   }
 }
 

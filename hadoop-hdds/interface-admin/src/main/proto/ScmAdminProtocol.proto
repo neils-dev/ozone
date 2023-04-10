@@ -579,10 +579,12 @@ message ContainerBalancerStatusResponseProto {
 message DecommissionScmRequestProto {
   required string clusterId = 1;
   required string nodeId = 2;
+  required hadoop.hdds.RemoveScmRequestProto removeScmRequest = 3;
 }
 
 message DecommissionScmResponseProto {
-  repeated DatanodeAdminErrorResponseProto failedHosts = 1;
+  /*repeated DatanodeAdminErrorResponseProto failedHosts = 1;*/
+  required hadoop.hdds.RemoveScmResponseProto removeScmResponse = 1;
 }
 
 /**
