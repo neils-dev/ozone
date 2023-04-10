@@ -106,7 +106,6 @@ import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolPro
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.ResetDeletedBlockRetryCountResponseProto;
 import org.apache.hadoop.hdds.scm.DatanodeAdminError;
 import org.apache.hadoop.hdds.scm.RemoveSCMRequest;
-import org.apache.hadoop.hdds.scm.RemoveScmError;
 import org.apache.hadoop.hdds.scm.ScmInfo;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
@@ -1224,17 +1223,9 @@ public final class StorageContainerLocationProtocolServerSideTranslatorPB
 
   public DecommissionScmResponseProto decommissionScm(
       DecommissionScmRequestProto request) throws IOException {
-    HddsProtos.RemoveScmResponseProto removeScmResponse =
-        HddsProtos.RemoveScmResponseProto.newBuilder()
-        .setSuccess(true)
-        .setScmId(request.getNodeId())
-        .build();
-
-    DecommissionScmResponseProto.Builder response =
-        DecommissionScmResponseProto.newBuilder()
-            .setRemoveScmResponse(removeScmResponse);
-
-    return response.build();
+    return impl.decommissionScm(request.getClusterId(),
+        request.getNodeId(),
+        RemoveSCMRequest.getFromProtobuf(request.getRemoveScmRequest()));
   }
 
 }

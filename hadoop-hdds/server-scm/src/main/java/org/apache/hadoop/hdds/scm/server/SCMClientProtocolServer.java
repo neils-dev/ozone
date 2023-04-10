@@ -38,6 +38,7 @@ import org.apache.hadoop.hdds.protocol.ReconfigureProtocol;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.protocol.proto.ReconfigureProtocolProtos.ReconfigureProtocolService;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.DeletedBlocksTransactionInfo;
+import org.apache.hadoop.hdds.protocol.proto.HddsProtos.RemoveScmResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.StartContainerBalancerResponseProto;
@@ -46,7 +47,6 @@ import org.apache.hadoop.hdds.protocolPB.ReconfigureProtocolServerSideTranslator
 import org.apache.hadoop.hdds.ratis.RatisHelper;
 import org.apache.hadoop.hdds.scm.DatanodeAdminError;
 import org.apache.hadoop.hdds.scm.RemoveSCMRequest;
-import org.apache.hadoop.hdds.scm.RemoveScmError;
 import org.apache.hadoop.hdds.scm.ScmInfo;
 import org.apache.hadoop.hdds.scm.container.ContainerID;
 import org.apache.hadoop.hdds.scm.container.ContainerInfo;
@@ -1331,11 +1331,11 @@ public class SCMClientProtocolServer implements
   @Override
   public DecommissionScmResponseProto decommissionScm(String clusterId,
       String nodeId, RemoveSCMRequest removeScm) throws IOException {
-    HddsProtos.RemoveScmResponseProto removeScmResponse =
-        HddsProtos.RemoveScmResponseProto.newBuilder()
-        .setScmId(nodeId)
-        .setSuccess(true)
-        .build();
+    RemoveScmResponseProto removeScmResponse =
+        RemoveScmResponseProto.newBuilder()
+            .setScmId(nodeId + " replyFromServer")
+            .setSuccess(true)
+            .build();
 
     return DecommissionScmResponseProto.newBuilder()
         .setRemoveScmResponse(removeScmResponse)

@@ -18,7 +18,8 @@
 package org.apache.hadoop.ozone.scm;
 
 import org.apache.hadoop.hdds.cli.OzoneAdmin;
-import org.apache.hadoop.hdds.scm.DatanodeAdminError;
+import org.apache.hadoop.hdds.protocol.proto.HddsProtos.RemoveScmResponseProto;
+import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.scm.client.ScmClient;
 import org.apache.hadoop.ozone.admin.scm.ScmDecommissionSubcommand;
 import org.apache.ozone.test.GenericTestUtils;
@@ -29,10 +30,11 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.mockito.Mockito;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.any;
-
 import picocli.CommandLine;
+
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+
 
 /**
  * Unit tests to validate the TestScmDecommissionSubCommand class includes the
@@ -58,18 +60,25 @@ public class TestScmDecommissionSubcommand {
     // now give required String <clusterId> and String <nodeId>
     CommandLine c1 = new CommandLine(cmd);
     c1.parseArgs("CID-", "4070f47e-");
-    /*Mockito.when(client.decommissionScm(any(), any()))
+    RemoveScmResponseProto removeScmResponse = RemoveScmResponseProto.newBuilder()
+        .setScmId("4070f47e")
+        .setSuccess(true)
+        .build();
+
+    DecommissionScmResponseProto response =
+        DecommissionScmResponseProto.newBuilder()
+            .setRemoveScmResponse(removeScmResponse)
+            .build();
+
+    Mockito.when(client.decommissionScm(any(), any(), any()))
         .thenAnswer(invocation -> (
-          new ArrayList<DatanodeAdminError>(Arrays
-              .asList(new DatanodeAdminError((String)(invocation.getArguments()[0]),
-                  "")))
-        ));
+            response));
 
     try (GenericTestUtils.SystemOutCapturer capture =
              new GenericTestUtils.SystemOutCapturer()) {
       cmd.execute(client);
       assertTrue(capture.getOutput().contains(
           "CID-"));
-    }*/
+    }
   }
 }

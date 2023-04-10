@@ -18,6 +18,7 @@
 package org.apache.hadoop.ozone.admin.scm;
 
 import org.apache.hadoop.hdds.cli.HddsVersionProvider;
+import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.scm.RemoveSCMRequest;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.scm.cli.ScmSubcommand;
@@ -54,14 +55,16 @@ public class ScmDecommissionSubcommand extends ScmSubcommand {
 
   @Override
   public void execute(ScmClient scmClient) throws IOException {
-    DecommissionScmResponseProto errors = scmClient.decommissionScm(clusterId, nodeId,
+    DecommissionScmResponseProto response = scmClient.decommissionScm(clusterId, nodeId,
         new RemoveSCMRequest(clusterId, nodeId, ""));
-    /*if (errors.size() > 0) {
-      for (DatanodeAdminError error : errors) {
-        System.out.println("Response: " + error.getHostname() + ": "
-            + error.getError());
-      }
-    }*/
+    HddsProtos.RemoveScmResponseProto removeResponse = response.getRemoveScmResponse();
+    if (!removeResponse.getSuccess()) {
+      System.out.println("Error decommissioning Scm "
+          + removeResponse.getScmId());
+    } else {
+      System.out.println("Decommissioned Scm " + removeResponse.getScmId()
+          + " from cluster "  + clusterId);
+    }
   }
 }
 
