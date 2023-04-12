@@ -39,6 +39,7 @@ import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
 import org.apache.hadoop.hdds.protocol.proto.ReconfigureProtocolProtos.ReconfigureProtocolService;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.DeletedBlocksTransactionInfo;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.RemoveScmResponseProto;
+import org.apache.hadoop.hdds.protocol.proto.HddsProtos.RemoveScmResponseProto.Builder;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.StartContainerBalancerResponseProto;
@@ -1329,16 +1330,23 @@ public class SCMClientProtocolServer implements
   }
 
   @Override
-  public DecommissionScmResponseProto decommissionScm(String clusterId,
-      String nodeId, RemoveSCMRequest removeScm) throws IOException {
-    RemoveScmResponseProto removeScmResponse =
+  public DecommissionScmResponseProto decommissionScm(
+      RemoveSCMRequest removeScm) {
+    String removeScmError = "";
+    Builder removeScmResponseBuilder =
         RemoveScmResponseProto.newBuilder()
-            .setScmId(nodeId + " replyFromServer")
-            .setSuccess(true)
-            .build();
-
+            .setScmId(removeScm.getScmId() + " replyFromServer");
+    try {
+      removeScmResponseBuilder
+          .setSuccess(scm.removePeerFromHARing(removeScm));
+    } catch (IOException ex) {
+      removeScmResponseBuilder
+          .setSuccess(false);
+      removeScmError = ex.getMessage();
+    }
     return DecommissionScmResponseProto.newBuilder()
-        .setRemoveScmResponse(removeScmResponse)
+        .setRemoveScmResponse(removeScmResponseBuilder.build())
+        .setRemoveScmError(removeScmError)
         .build();
   }
 }

@@ -55,12 +55,13 @@ public class ScmDecommissionSubcommand extends ScmSubcommand {
 
   @Override
   public void execute(ScmClient scmClient) throws IOException {
-    DecommissionScmResponseProto response = scmClient.decommissionScm(clusterId, nodeId,
-        new RemoveSCMRequest(clusterId, nodeId, ""));
+    DecommissionScmResponseProto response = scmClient
+        .decommissionScm(new RemoveSCMRequest(clusterId, nodeId, ""));
     HddsProtos.RemoveScmResponseProto removeResponse = response.getRemoveScmResponse();
     if (!removeResponse.getSuccess()) {
       System.out.println("Error decommissioning Scm "
           + removeResponse.getScmId());
+      System.out.println(response.getRemoveScmError());
     } else {
       System.out.println("Decommissioned Scm " + removeResponse.getScmId()
           + " from cluster "  + clusterId);

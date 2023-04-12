@@ -1081,14 +1081,11 @@ public final class StorageContainerLocationProtocolClientSideTranslatorPB
   }
 
   @Override
-  public DecommissionScmResponseProto decommissionScm(String clusterId,
-      String nodeId, RemoveSCMRequest removeScmRequest)
-      throws IOException {
+  public DecommissionScmResponseProto decommissionScm(
+      RemoveSCMRequest removeScmRequest) throws IOException {
 
     DecommissionScmRequestProto request = DecommissionScmRequestProto
         .newBuilder()
-        .setClusterId(clusterId)
-        .setNodeId(nodeId)
         .setRemoveScmRequest(removeScmRequest.getProtobuf())
         .build();
     DecommissionScmResponseProto response =

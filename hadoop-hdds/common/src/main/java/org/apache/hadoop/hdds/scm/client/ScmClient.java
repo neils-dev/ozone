@@ -424,6 +424,6 @@ public interface ScmClient extends Closeable {
       String upgradeClientID, boolean force, boolean readonly)
       throws IOException;
 
-  DecommissionScmResponseProto decommissionScm(String clusterId,
-      String nodeId, RemoveSCMRequest removeScmRequest) throws IOException;
+  DecommissionScmResponseProto decommissionScm(
+      RemoveSCMRequest removeScmRequest) throws IOException;
 }

@@ -456,6 +456,6 @@ public interface StorageContainerLocationProtocol extends Closeable {
       long startContainerID, int count, HddsProtos.LifeCycleState state)
       throws IOException;
 
-  DecommissionScmResponseProto decommissionScm(String clusterId,
-      String nodeId, RemoveSCMRequest removeScmRequest) throws IOException;
+  DecommissionScmResponseProto decommissionScm(
+      RemoveSCMRequest removeScmRequest) throws IOException;
 }

@@ -1223,8 +1223,7 @@ public final class StorageContainerLocationProtocolServerSideTranslatorPB
 
   public DecommissionScmResponseProto decommissionScm(
       DecommissionScmRequestProto request) throws IOException {
-    return impl.decommissionScm(request.getClusterId(),
-        request.getNodeId(),
+    return impl.decommissionScm(
         RemoveSCMRequest.getFromProtobuf(request.getRemoveScmRequest()));
   }
 

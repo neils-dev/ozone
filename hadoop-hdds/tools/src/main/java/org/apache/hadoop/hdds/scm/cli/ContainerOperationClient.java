@@ -509,11 +509,10 @@ public class ContainerOperationClient implements ScmClient {
   }
 
   @Override
-  public DecommissionScmResponseProto decommissionScm(String clusterId,
-      String scmNodeId, RemoveSCMRequest removeScmRequest)
+  public DecommissionScmResponseProto decommissionScm(
+      RemoveSCMRequest removeScmRequest)
       throws IOException {
-    return storageContainerLocationClient.decommissionScm(clusterId,
-        scmNodeId, removeScmRequest);
+    return storageContainerLocationClient.decommissionScm(removeScmRequest);
   }
 
 }

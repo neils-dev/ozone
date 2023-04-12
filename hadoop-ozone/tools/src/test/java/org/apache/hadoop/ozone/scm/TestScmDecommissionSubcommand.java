@@ -24,8 +24,7 @@ import org.apache.hadoop.hdds.scm.client.ScmClient;
 import org.apache.hadoop.ozone.admin.scm.ScmDecommissionSubcommand;
 import org.apache.ozone.test.GenericTestUtils;
 
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -59,9 +58,10 @@ public class TestScmDecommissionSubcommand {
 
     // now give required String <clusterId> and String <nodeId>
     CommandLine c1 = new CommandLine(cmd);
-    c1.parseArgs("CID-", "4070f47e-");
+    String scmId = UUID.randomUUID().toString();
+    c1.parseArgs("CID-" + UUID.randomUUID().toString(), scmId);
     RemoveScmResponseProto removeScmResponse = RemoveScmResponseProto.newBuilder()
-        .setScmId("4070f47e")
+        .setScmId(scmId)
         .setSuccess(true)
         .build();
 
@@ -70,7 +70,7 @@ public class TestScmDecommissionSubcommand {
             .setRemoveScmResponse(removeScmResponse)
             .build();
 
-    Mockito.when(client.decommissionScm(any(), any(), any()))
+    Mockito.when(client.decommissionScm(any()))
         .thenAnswer(invocation -> (
             response));
 
@@ -81,4 +81,42 @@ public class TestScmDecommissionSubcommand {
           "CID-"));
     }
   }
+
+  @Test
+  public void testScmDecommissionScmRemoveErrors() throws Exception {
+    // requires String <clusterId> and String <nodeId>
+    ScmDecommissionSubcommand cmd = new ScmDecommissionSubcommand();
+    ScmClient client = mock(ScmClient.class);
+    OzoneAdmin admin = new OzoneAdmin();
+
+    CommandLine c1 = new CommandLine(cmd);
+    String scmId = UUID.randomUUID().toString();
+    c1.parseArgs("CID-" + UUID.randomUUID().toString(), scmId);
+    RemoveScmResponseProto removeScmResponse = RemoveScmResponseProto.newBuilder()
+        .setScmId(scmId)
+        .setSuccess(false)
+        .build();
+
+    DecommissionScmResponseProto response =
+        DecommissionScmResponseProto.newBuilder()
+            .setRemoveScmResponse(removeScmResponse)
+            .setRemoveScmError("Removal of primordial node is not supported")
+            .build();
+
+    Mockito.when(client.decommissionScm(any()))
+        .thenAnswer(invocation -> (
+            response));
+
+    try (GenericTestUtils.SystemOutCapturer capture =
+             new GenericTestUtils.SystemOutCapturer()) {
+      cmd.execute(client);
+      assertTrue(capture.getOutput().contains(
+          "Removal of primordial"));
+    }
+  }
+
+  @Test
+  public void testScmDecommissionScmCertRevokeErrors() throws Exception {
+  }
+
 }
