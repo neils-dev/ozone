@@ -28,7 +28,9 @@ import org.apache.hadoop.hdds.scm.ha.SCMHAManagerStub;
 import org.apache.hadoop.hdds.scm.protocol.StorageContainerLocationProtocolServerSideTranslatorPB;
 import org.apache.hadoop.hdds.utils.ProtocolMessageMetrics;
 import org.apache.ozone.test.GenericTestUtils;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mockito;
@@ -36,12 +38,17 @@ import org.mockito.Mockito;
 import java.io.File;
 import java.util.UUID;
 
+/**
+ * Unit tests to validate the SCMClientProtocolServer
+ * servicing commands from the scm client.
+ */
 public class TestSCMClientProtocolServer {
   private OzoneConfiguration config;
   private SCMClientProtocolServer server;
   private StorageContainerManager scm;
   private StorageContainerLocationProtocolServerSideTranslatorPB service;
 
+  @BeforeEach
   public void setUp() throws Exception {
     config = new OzoneConfiguration();
     File dir = GenericTestUtils.getRandomizedTestDir();
@@ -58,6 +65,7 @@ public class TestSCMClientProtocolServer {
         scm, Mockito.mock(ProtocolMessageMetrics.class));
   }
 
+  @AfterEach
   public void tearDown() throws Exception {
     if (scm != null) {
       scm.stop();
@@ -65,28 +73,31 @@ public class TestSCMClientProtocolServer {
     }
   }
 
+  /**
+   * Tests decommissioning of scm.
+   */
   @Test
   public void testScmDecommissionScmRemoveErrors() throws Exception {
-    setUp();
-    //server.decommissionScm()
-    String scmId = UUID.randomUUID().toString();
+    String scmId = scm.getScmId();
     String clusterId = "CID-" + UUID.randomUUID();
-    RemoveScmRequestProto removeScmRequest = RemoveScmRequestProto.newBuilder()
-        .setScmId(scmId)
-        .setClusterId(clusterId)
-        .setRatisAddr("")
-        .build();
+    String err = "Cannot remove current leader.";
+
+    RemoveScmRequestProto removeScmRequest =
+        RemoveScmRequestProto.newBuilder()
+            .setScmId(scmId)
+            .setClusterId(clusterId)
+            .setRatisAddr("localhost") // ratis addr not avail in utils scm
+            .build();
 
     DecommissionScmRequestProto request =
         DecommissionScmRequestProto.newBuilder()
             .setRemoveScmRequest(removeScmRequest)
             .build();
 
-    //scm.removePeerFromHARing();
     DecommissionScmResponseProto resp =
         service.decommissionScm(request);
 
-    tearDown();
+    assertTrue(resp.getRemoveScmError()
+        .equals(err));
   }
-
 }

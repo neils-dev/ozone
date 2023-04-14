@@ -307,7 +307,7 @@ message SCMCloseContainerResponseProto {
 
 /*
  NodeQueryRequest sends a request to SCM asking to send a list of nodes that
- match the  NodeState that we are requesting.
+ match the NodeState that we are requesting.
 */
 message NodeQueryRequestProto {
   optional NodeState state = 1;
@@ -582,7 +582,7 @@ message DecommissionScmRequestProto {
 
 message DecommissionScmResponseProto {
   required hadoop.hdds.RemoveScmResponseProto removeScmResponse = 1;
-  optional string removeScmError = 2;
+  required string removeScmError = 2;
 }
 
 /**

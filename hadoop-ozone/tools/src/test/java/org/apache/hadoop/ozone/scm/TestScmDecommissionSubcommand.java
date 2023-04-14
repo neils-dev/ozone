@@ -21,19 +21,19 @@ import org.apache.hadoop.hdds.cli.OzoneAdmin;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos.RemoveScmResponseProto;
 import org.apache.hadoop.hdds.protocol.proto.StorageContainerLocationProtocolProtos.DecommissionScmResponseProto;
 import org.apache.hadoop.hdds.scm.client.ScmClient;
-import org.apache.hadoop.ozone.admin.scm.ScmDecommissionSubcommand;
+import org.apache.hadoop.ozone.admin.scm.DecommissionScmSubcommand;
 import org.apache.ozone.test.GenericTestUtils;
 
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import org.mockito.Mockito;
+
 import picocli.CommandLine;
+import org.mockito.Mockito;
 
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
-
 
 /**
  * Unit tests to validate the TestScmDecommissionSubCommand class includes the
@@ -44,7 +44,7 @@ public class TestScmDecommissionSubcommand {
   @Test
   public void testScmDecommissionInputParams() throws Exception {
     // requires String <clusterId> and String <nodeId>
-    ScmDecommissionSubcommand cmd = new ScmDecommissionSubcommand();
+    DecommissionScmSubcommand cmd = new DecommissionScmSubcommand();
     ScmClient client = mock(ScmClient.class);
     OzoneAdmin admin = new OzoneAdmin();
 
@@ -60,7 +60,8 @@ public class TestScmDecommissionSubcommand {
     CommandLine c1 = new CommandLine(cmd);
     String scmId = UUID.randomUUID().toString();
     c1.parseArgs("CID-" + UUID.randomUUID().toString(), scmId);
-    RemoveScmResponseProto removeScmResponse = RemoveScmResponseProto.newBuilder()
+    RemoveScmResponseProto removeScmResponse =
+        RemoveScmResponseProto.newBuilder()
         .setScmId(scmId)
         .setSuccess(true)
         .build();
@@ -85,14 +86,14 @@ public class TestScmDecommissionSubcommand {
   @Test
   public void testScmDecommissionScmRemoveErrors() throws Exception {
     // requires String <clusterId> and String <nodeId>
-    ScmDecommissionSubcommand cmd = new ScmDecommissionSubcommand();
+    DecommissionScmSubcommand cmd = new DecommissionScmSubcommand();
     ScmClient client = mock(ScmClient.class);
-    OzoneAdmin admin = new OzoneAdmin();
 
     CommandLine c1 = new CommandLine(cmd);
     String scmId = UUID.randomUUID().toString();
     c1.parseArgs("CID-" + UUID.randomUUID().toString(), scmId);
-    RemoveScmResponseProto removeScmResponse = RemoveScmResponseProto.newBuilder()
+    RemoveScmResponseProto removeScmResponse =
+        RemoveScmResponseProto.newBuilder()
         .setScmId(scmId)
         .setSuccess(false)
         .build();
@@ -115,6 +116,7 @@ public class TestScmDecommissionSubcommand {
     }
   }
 
+  // TO DO : test decommission revoke certificate
   @Test
   public void testScmDecommissionScmCertRevokeErrors() throws Exception {
   }

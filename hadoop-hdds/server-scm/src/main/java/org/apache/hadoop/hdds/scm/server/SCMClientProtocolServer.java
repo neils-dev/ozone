@@ -1335,15 +1335,29 @@ public class SCMClientProtocolServer implements
     String removeScmError = "";
     Builder removeScmResponseBuilder =
         RemoveScmResponseProto.newBuilder()
-            .setScmId(removeScm.getScmId() + " replyFromServer");
+            .setScmId(removeScm.getScmId());
+
+    RemoveSCMRequest removeScmRequest = removeScm;
+
+    // set ratis address in server if not supplied by scm client
+    if (removeScm.getRatisAddr().equals("")) {
+      removeScmRequest = new RemoveSCMRequest(
+          removeScm.getClusterId(),
+          removeScm.getScmId(),
+          "localhost:" + scm.getScmHAManager().getRatisServer()
+              .getDivision().getRaftServer().getServerRpc()
+              .getInetSocketAddress().getPort());
+    }
+
     try {
       removeScmResponseBuilder
-          .setSuccess(scm.removePeerFromHARing(removeScm));
+          .setSuccess(scm.removePeerFromHARing(removeScmRequest));
     } catch (IOException ex) {
       removeScmResponseBuilder
           .setSuccess(false);
       removeScmError = ex.getMessage();
     }
+
     return DecommissionScmResponseProto.newBuilder()
         .setRemoveScmResponse(removeScmResponseBuilder.build())
         .setRemoveScmError(removeScmError)

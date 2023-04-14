@@ -1226,5 +1226,4 @@ public final class StorageContainerLocationProtocolServerSideTranslatorPB
     return impl.decommissionScm(
         RemoveSCMRequest.getFromProtobuf(request.getRemoveScmRequest()));
   }
-
 }
