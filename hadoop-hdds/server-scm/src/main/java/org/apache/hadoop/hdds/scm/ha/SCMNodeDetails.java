@@ -214,4 +214,5 @@ public final class SCMNodeDetails extends NodeDetails {
   public int getGrpcPort() {
     return grpcPort;
   }
+
 }

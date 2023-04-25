@@ -62,8 +62,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Vector;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+
+import org.bouncycastle.asn1.x509.X509Name;
+import org.bouncycastle.jce.PrincipalUtil;
+import org.bouncycastle.jce.X509Principal;
 
 import static org.apache.hadoop.hdds.scm.ScmConfigKeys.OZONE_SCM_CA_LIST_RETRY_INTERVAL;
 import static org.apache.hadoop.hdds.scm.ScmConfigKeys.OZONE_SCM_CA_LIST_RETRY_INTERVAL_DEFAULT;
@@ -444,6 +451,23 @@ public final class HAUtils {
     }
   }
 
+    private static int getCACertCount(List<String> certs) {
+    Set<String> cns = new HashSet<>();
+    for (String certPemStr : certs) {
+      try {
+        X509Certificate cert = CertificateCodec.getX509Certificate(certPemStr);
+        X509Principal principal = PrincipalUtil.getSubjectX509Principal(cert);
+        Vector<?> values = principal.getValues(X509Name.CN);
+        cns.add((String) values.get(0));
+        LOG.info("cert subjectDN CN = {}",  values.get(0));
+      } catch (Exception ex) {
+        LOG.error("Failed to parse certificate.");
+      }
+    }
+    return cns.size();
+  }
+
+
   private static List<String> waitForCACerts(
       final SupplierWithIOException<List<String>> applyFunction,
       int expectedCount) throws IOException {
@@ -452,7 +476,9 @@ public final class HAUtils {
     // For now when Client of SCM's are started we compare their node list
     // size and ca list size if it is as expected, we return the ca list.
     List<String> caCertPemList = applyFunction.get();
-    boolean caListUpToDate = caCertPemList.size() == expectedCount;
+    int certSize = getCACertCount(caCertPemList);
+    //boolean caListUpToDate = caCertPemList.size() == expectedCount;
+    boolean caListUpToDate = certSize == expectedCount;
     if (!caListUpToDate) {
       LOG.info("Expected CA list size {}, where as received CA List size " +
           "{}.", expectedCount, caCertPemList.size());

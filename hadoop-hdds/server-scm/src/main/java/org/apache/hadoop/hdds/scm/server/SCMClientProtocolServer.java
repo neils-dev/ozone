@@ -1332,14 +1332,14 @@ public class SCMClientProtocolServer implements
   public DecommissionScmResponseProto decommissionScm(
       String scmId) {
     // TODO: update to use modified scm.removePeerFromHARing, HDDS-8452
-    RemoveSCMRequest removeScmRequest = new RemoveSCMRequest(
-        scm.getClusterId(), scmId, "");
+    /*RemoveSCMRequest removeScmRequest = new RemoveSCMRequest(
+        scm.getClusterId(), scmId, "");*/
     Builder decommissionScmResponseBuilder =
         DecommissionScmResponseProto.newBuilder();
 
     try {
       decommissionScmResponseBuilder
-          .setSuccess(scm.removePeerFromHARing(removeScmRequest));
+          .setSuccess(scm.removePeerFromHARing(scmId));
     } catch (IOException ex) {
       decommissionScmResponseBuilder
           .setSuccess(false)
